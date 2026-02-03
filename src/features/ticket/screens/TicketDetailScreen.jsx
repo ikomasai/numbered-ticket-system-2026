@@ -265,177 +265,164 @@ const TicketDetailScreen = ({ route, navigation }) => {
 
       {/* メインコンテンツ */}
       <ScrollView style={styles.content}>
-        {/* 企画情報 */}
-        <View style={styles.eventInfo}>
-          <View style={styles.eventHeader}>
-            <Text style={styles.eventName}>{event.name}</Text>
-            <View
-              style={[
-                styles.typeBadge,
-                { backgroundColor: event.type === EVENT_TYPES.TIME_SLOT ? COLORS.PRIMARY : COLORS.SECONDARY },
-              ]}
-            >
-              <Text style={styles.typeBadgeText}>{EVENT_TYPE_LABELS[event.type]}</Text>
-            </View>
-          </View>
-          <Text style={styles.eventLocation}>{event.location}</Text>
-        </View>
-
-        {/* 選択中の日付の情報 */}
-        {selectedDate && (
-          <View style={styles.dateInfo}>
-            <Text style={styles.dateText}>{formatDateWithDay(selectedDate.date)}</Text>
-            <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[selectedDate.status] }]}>
-              <Text style={styles.statusBadgeText}>{STATUS_LABELS[selectedDate.status]}</Text>
-            </View>
-          </View>
-        )}
-
-        {/* ステータスが発券中でない場合の警告 */}
-        {selectedDate && !isDateActive && (
-          <View style={styles.warningContainer}>
-            <Text style={styles.warningText}>
-              この日は現在{STATUS_LABELS[selectedDate.status]}のため発券できません
-            </Text>
-          </View>
-        )}
-
-        {/* 時間枠定員制の場合 */}
-        {event.type === EVENT_TYPES.TIME_SLOT && isDateActive && (
-          <View style={styles.contentRow}>
-            {/* 左側：時間枠選択 */}
-            <View style={styles.timeSlotsContainer}>
-              <Text style={styles.sectionTitle}>時間枠を選択</Text>
-              {isLoading ? (
-                <ActivityIndicator size="small" color={COLORS.PRIMARY} />
-              ) : timeSlots.length > 0 ? (
-                <View style={styles.timeSlotsGrid}>
-                  {/* 左列 */}
-                  <View style={styles.timeSlotsColumn}>
-                    {timeSlots.slice(0, Math.ceil(timeSlots.length / 2)).map(slot => {
-                      const isSlotSelected = selectedTimeSlot?.id === slot.id;
-                      const isSlotActive = slot.status === STATUS.ACTIVE;
-                      const isFull = slot.current_count >= event.capacity_per_slot;
-                      const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot);
-
-                      return (
-                        <TouchableOpacity
-                          key={slot.id}
-                          style={[
-                            styles.timeSlotItem,
-                            isSlotSelected && styles.timeSlotItemSelected,
-                            (!isSlotActive || isFull) && styles.timeSlotItemDisabled,
-                          ]}
-                          onPress={() => isSlotActive && !isFull && setSelectedTimeSlot(slot)}
-                          disabled={!isSlotActive || isFull}
-                        >
-                          <Text style={styles.timeSlotTime}>
-                            {formatTimeSlotDisplay(slot.start_time, slot.end_time)}
-                          </Text>
-                          <View style={{ flexDirection: 'row' }}>
-                            <Text style={[
-                              styles.timeSlotCount,
-                              isSlotActive && !isFull && { color: statusColor, fontWeight: 'bold' },
-                            ]}>
-                              {slot.current_count}
-                            </Text>
-                            <Text style={styles.timeSlotCount}>
-                              /{event.capacity_per_slot}
-                            </Text>
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                  {/* 右列 */}
-                  <View style={styles.timeSlotsColumn}>
-                    {timeSlots.slice(Math.ceil(timeSlots.length / 2)).map(slot => {
-                      const isSlotSelected = selectedTimeSlot?.id === slot.id;
-                      const isSlotActive = slot.status === STATUS.ACTIVE;
-                      const isFull = slot.current_count >= event.capacity_per_slot;
-                      const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot);
-
-                      return (
-                        <TouchableOpacity
-                          key={slot.id}
-                          style={[
-                            styles.timeSlotItem,
-                            isSlotSelected && styles.timeSlotItemSelected,
-                            (!isSlotActive || isFull) && styles.timeSlotItemDisabled,
-                          ]}
-                          onPress={() => isSlotActive && !isFull && setSelectedTimeSlot(slot)}
-                          disabled={!isSlotActive || isFull}
-                        >
-                          <Text style={styles.timeSlotTime}>
-                            {formatTimeSlotDisplay(slot.start_time, slot.end_time)}
-                          </Text>
-                          <View style={{ flexDirection: 'row' }}>
-                            <Text style={[
-                              styles.timeSlotCount,
-                              isSlotActive && !isFull && { color: statusColor, fontWeight: 'bold' },
-                            ]}>
-                              {slot.current_count}
-                            </Text>
-                            <Text style={styles.timeSlotCount}>
-                              /{event.capacity_per_slot}
-                            </Text>
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
+        <View style={styles.mainRow}>
+          {/* 左側：企画情報・日付・操作パネル */}
+          <View style={styles.leftPanel}>
+            {/* 企画情報 */}
+            <View style={styles.eventInfo}>
+              <View style={styles.eventHeader}>
+                <Text style={styles.eventName}>{event.name}</Text>
+                <View
+                  style={[
+                    styles.typeBadge,
+                    { backgroundColor: event.type === EVENT_TYPES.TIME_SLOT ? COLORS.PRIMARY : COLORS.SECONDARY },
+                  ]}
+                >
+                  <Text style={styles.typeBadgeText}>{EVENT_TYPE_LABELS[event.type]}</Text>
                 </View>
-              ) : (
-                <Text style={styles.noSlotsText}>時間枠が設定されていません</Text>
-              )}
+              </View>
+              <Text style={styles.eventLocation}>{event.location}</Text>
             </View>
 
-            {/* 右側：操作パネル */}
-            <View style={styles.operationPanel}>
-              <RadioGroup
-                label="発行媒体"
-                options={mediumTypeOptions}
-                value={mediumType}
-                onValueChange={setMediumType}
-              />
-              <Button
-                title="発券する"
-                onPress={handleIssue}
-                isLoading={isIssuing}
-                disabled={isIssueDisabled}
-                style={styles.issueButton}
-              />
-            </View>
+            {/* 選択中の日付の情報 */}
+            {selectedDate && (
+              <View style={styles.dateInfo}>
+                <Text style={styles.dateText}>{formatDateWithDay(selectedDate.date)}</Text>
+                <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[selectedDate.status] }]}>
+                  <Text style={styles.statusBadgeText}>{STATUS_LABELS[selectedDate.status]}</Text>
+                </View>
+              </View>
+            )}
+
+            {/* ステータスが発券中でない場合の警告 */}
+            {selectedDate && !isDateActive && (
+              <View style={styles.warningContainer}>
+                <Text style={styles.warningText}>
+                  この日は現在{STATUS_LABELS[selectedDate.status]}のため発券できません
+                </Text>
+              </View>
+            )}
+
+            {/* 操作パネル */}
+            {isDateActive && (
+              <View style={styles.operationPanel}>
+                <RadioGroup
+                  label="発行媒体"
+                  options={mediumTypeOptions}
+                  value={mediumType}
+                  onValueChange={setMediumType}
+                />
+                <Button
+                  title="発券する"
+                  onPress={handleIssue}
+                  isLoading={isIssuing}
+                  disabled={isIssueDisabled}
+                  style={styles.issueButton}
+                />
+              </View>
+            )}
           </View>
-        )}
 
-        {/* 順次案内制の場合 */}
-        {event.type === EVENT_TYPES.SEQUENTIAL && isDateActive && selectedDate && (
-          <>
-            {/* 次の番号表示 */}
-            <View style={styles.nextNumberContainer}>
-              <Text style={styles.nextNumberLabel}>次の整理番号</Text>
-              <Text style={styles.nextNumber}>{selectedDate.next_ticket_number}</Text>
-            </View>
+          {/* 右側：時間枠選択または順次案内制の情報 */}
+          <View style={styles.rightPanel}>
+            {/* 時間枠定員制の場合 */}
+            {event.type === EVENT_TYPES.TIME_SLOT && isDateActive && (
+              <View style={styles.timeSlotsContainer}>
+                <Text style={styles.sectionTitle}>時間枠を選択</Text>
+                {isLoading ? (
+                  <ActivityIndicator size="small" color={COLORS.PRIMARY} />
+                ) : timeSlots.length > 0 ? (
+                  <View style={styles.timeSlotsGrid}>
+                    {/* 左列 */}
+                    <View style={styles.timeSlotsColumn}>
+                      {timeSlots.slice(0, Math.ceil(timeSlots.length / 2)).map(slot => {
+                        const isSlotSelected = selectedTimeSlot?.id === slot.id;
+                        const isSlotActive = slot.status === STATUS.ACTIVE;
+                        const isFull = slot.current_count >= event.capacity_per_slot;
+                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot);
 
-            {/* 媒体選択 */}
-            <RadioGroup
-              label="発行媒体"
-              options={mediumTypeOptions}
-              value={mediumType}
-              onValueChange={setMediumType}
-            />
+                        return (
+                          <TouchableOpacity
+                            key={slot.id}
+                            style={[
+                              styles.timeSlotItem,
+                              isSlotSelected && styles.timeSlotItemSelected,
+                              (!isSlotActive || isFull) && styles.timeSlotItemDisabled,
+                            ]}
+                            onPress={() => isSlotActive && !isFull && setSelectedTimeSlot(slot)}
+                            disabled={!isSlotActive || isFull}
+                          >
+                            <Text style={styles.timeSlotTime}>
+                              {formatTimeSlotDisplay(slot.start_time, slot.end_time)}
+                            </Text>
+                            <View style={{ flexDirection: 'row' }}>
+                              <Text style={[
+                                styles.timeSlotCount,
+                                isSlotActive && !isFull && { color: statusColor, fontWeight: 'bold' },
+                              ]}>
+                                {slot.current_count}
+                              </Text>
+                              <Text style={styles.timeSlotCount}>
+                                /{event.capacity_per_slot}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                    {/* 右列 */}
+                    <View style={styles.timeSlotsColumn}>
+                      {timeSlots.slice(Math.ceil(timeSlots.length / 2)).map(slot => {
+                        const isSlotSelected = selectedTimeSlot?.id === slot.id;
+                        const isSlotActive = slot.status === STATUS.ACTIVE;
+                        const isFull = slot.current_count >= event.capacity_per_slot;
+                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot);
 
-            {/* 発券ボタン */}
-            <Button
-              title="発券する"
-              onPress={handleIssue}
-              isLoading={isIssuing}
-              disabled={isIssueDisabled}
-              style={styles.issueButton}
-            />
-          </>
-        )}
+                        return (
+                          <TouchableOpacity
+                            key={slot.id}
+                            style={[
+                              styles.timeSlotItem,
+                              isSlotSelected && styles.timeSlotItemSelected,
+                              (!isSlotActive || isFull) && styles.timeSlotItemDisabled,
+                            ]}
+                            onPress={() => isSlotActive && !isFull && setSelectedTimeSlot(slot)}
+                            disabled={!isSlotActive || isFull}
+                          >
+                            <Text style={styles.timeSlotTime}>
+                              {formatTimeSlotDisplay(slot.start_time, slot.end_time)}
+                            </Text>
+                            <View style={{ flexDirection: 'row' }}>
+                              <Text style={[
+                                styles.timeSlotCount,
+                                isSlotActive && !isFull && { color: statusColor, fontWeight: 'bold' },
+                              ]}>
+                                {slot.current_count}
+                              </Text>
+                              <Text style={styles.timeSlotCount}>
+                                /{event.capacity_per_slot}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ) : (
+                  <Text style={styles.noSlotsText}>時間枠が設定されていません</Text>
+                )}
+              </View>
+            )}
+
+            {/* 順次案内制の場合 */}
+            {event.type === EVENT_TYPES.SEQUENTIAL && isDateActive && selectedDate && (
+              <View style={styles.nextNumberContainer}>
+                <Text style={styles.nextNumberLabel}>次の整理番号</Text>
+                <Text style={styles.nextNumber}>{selectedDate.next_ticket_number}</Text>
+              </View>
+            )}
+          </View>
+        </View>
       </ScrollView>
 
       {/* 発券結果モーダル */}
@@ -496,6 +483,16 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: SPACING.MD,
+  },
+  mainRow: {
+    flexDirection: 'row',
+    gap: SPACING.MD,
+  },
+  leftPanel: {
+    flex: 1,
+  },
+  rightPanel: {
+    flex: 2,
   },
   eventInfo: {
     backgroundColor: COLORS.CARD_BACKGROUND,
@@ -573,11 +570,6 @@ const styles = StyleSheet.create({
     color: COLORS.TEXT,
     marginBottom: SPACING.SM,
   },
-  contentRow: {
-    flexDirection: 'row',
-    gap: SPACING.MD,
-    marginBottom: SPACING.MD,
-  },
   timeSlotsContainer: {
     flex: 1,
     backgroundColor: COLORS.CARD_BACKGROUND,
@@ -585,7 +577,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   operationPanel: {
-    width: 280,
     backgroundColor: COLORS.CARD_BACKGROUND,
     padding: SPACING.MD,
     borderRadius: 12,

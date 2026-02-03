@@ -298,7 +298,7 @@ const EventEditScreen = () => {
 
           {/* 時間枠定員制の場合は時間枠ごとのステータス管理 */}
           {event.type === EVENT_TYPES.TIME_SLOT && event.event_dates?.map((dateItem) => (
-            <View key={`slots-${dateItem.id}`} style={styles.section}>
+            <View key={`slots-${dateItem.id}`} style={styles.timeSlotsSection}>
               <View style={styles.sectionTitleContainer}>
                 <Text style={styles.sectionTitle}>
                   {formatDateWithDay(dateItem.date)} - 時間枠ステータス
@@ -449,6 +449,13 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.CARD_BACKGROUND,
     borderRadius: 8,
   },
+  timeSlotsSection: {
+    marginTop: SPACING.MD,
+    marginBottom: 0,
+    padding: SPACING.MD,
+    backgroundColor: COLORS.CARD_BACKGROUND,
+    borderRadius: 8,
+  },
   sectionTitle: {
     fontSize: FONT_SIZES.LG,
     fontWeight: '600',
@@ -592,6 +599,27 @@ const styles = StyleSheet.create({
   },
   backButton: {
     minWidth: 150,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingBox: {
+    backgroundColor: COLORS.CARD_BACKGROUND,
+    padding: SPACING.LG,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  loadingOverlayText: {
+    marginTop: SPACING.MD,
+    fontSize: FONT_SIZES.MD,
+    color: COLORS.TEXT,
   },
 });
 

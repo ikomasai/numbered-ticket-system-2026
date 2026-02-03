@@ -180,7 +180,7 @@ export const useCall = () => {
       return { success: false, error: new Error('企画と開催日を選択してください') };
     }
 
-    // 現在の発券番号より大きい番号は設定できない
+    // 最後尾番号より大きい番号は設定できない
     if (newCallNumber >= selectedEventDate.next_ticket_number) {
       return {
         success: false,

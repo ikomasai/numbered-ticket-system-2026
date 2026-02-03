@@ -229,165 +229,173 @@ const StatusDetailScreen = ({ route, navigation }) => {
           <RefreshControl refreshing={isRefreshing} onRefresh={refreshData} />
         }
       >
-        {/* 企画情報 */}
-        <View style={styles.eventInfo}>
-          <View style={styles.eventHeader}>
-            <Text style={styles.eventName}>{event.name}</Text>
-            <View
-              style={[
-                styles.typeBadge,
-                { backgroundColor: event.type === EVENT_TYPES.TIME_SLOT ? COLORS.PRIMARY : COLORS.SECONDARY },
-              ]}
-            >
-              <Text style={styles.typeBadgeText}>{EVENT_TYPE_LABELS[event.type]}</Text>
-            </View>
-          </View>
-          <Text style={styles.eventLocation}>{event.location}</Text>
-        </View>
-
-        {/* 選択中の日付の情報 */}
-        {selectedDate && (
-          <View style={styles.dateInfo}>
-            <Text style={styles.dateText}>{formatDateWithDay(selectedDate.date)}</Text>
-            <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[selectedDate.status] }]}>
-              <Text style={styles.statusBadgeText}>{STATUS_LABELS[selectedDate.status]}</Text>
-            </View>
-          </View>
-        )}
-
-        {/* 時間枠定員制の状況表示 */}
-        {event.type === EVENT_TYPES.TIME_SLOT && (
-          <View style={styles.statusSection}>
-            <Text style={styles.sectionTitle}>時間枠ごとの発券状況</Text>
-            {isLoading ? (
-              <ActivityIndicator size="small" color={COLORS.PRIMARY} />
-            ) : timeSlots.length === 0 ? (
-              <Text style={styles.noDataText}>時間枠がありません</Text>
-            ) : (
-              <View style={styles.timeSlotsGrid}>
-                {/* 左列 */}
-                <View style={styles.timeSlotsColumn}>
-                  {timeSlots.slice(0, Math.ceil(timeSlots.length / 2)).map((slot) => {
-                    const rate = calculateRate(slot.current_count, event.capacity_per_slot);
-                    return (
-                      <View key={slot.id} style={styles.slotCard}>
-                        <View style={styles.slotHeader}>
-                          <Text style={styles.slotTime}>
-                            {formatTimeSlotDisplay(slot.start_time, slot.end_time)}
-                          </Text>
-                          <View
-                            style={[
-                              styles.slotStatusBadge,
-                              { backgroundColor: STATUS_COLORS[slot.status] },
-                            ]}
-                          >
-                            <Text style={styles.slotStatusBadgeText}>
-                              {STATUS_LABELS[slot.status]}
-                            </Text>
-                          </View>
-                        </View>
-                        <View style={styles.slotBody}>
-                          <Text style={styles.countText}>
-                            {slot.current_count} / {event.capacity_per_slot}
-                          </Text>
-                          <View style={styles.progressBarContainer}>
-                            <View
-                              style={[
-                                styles.progressBar,
-                                {
-                                  width: `${Math.min(rate, 100)}%`,
-                                  backgroundColor: rate >= 100 ? COLORS.ERROR : COLORS.PRIMARY,
-                                },
-                              ]}
-                            />
-                          </View>
-                          <Text style={styles.rateText}>{rate}%</Text>
-                        </View>
-                      </View>
-                    );
-                  })}
+        <View style={styles.mainRow}>
+          {/* 左側：企画情報・日付 */}
+          <View style={styles.leftPanel}>
+            {/* 企画情報 */}
+            <View style={styles.eventInfo}>
+              <View style={styles.eventHeader}>
+                <Text style={styles.eventName}>{event.name}</Text>
+                <View
+                  style={[
+                    styles.typeBadge,
+                    { backgroundColor: event.type === EVENT_TYPES.TIME_SLOT ? COLORS.PRIMARY : COLORS.SECONDARY },
+                  ]}
+                >
+                  <Text style={styles.typeBadgeText}>{EVENT_TYPE_LABELS[event.type]}</Text>
                 </View>
-                {/* 右列 */}
-                <View style={styles.timeSlotsColumn}>
-                  {timeSlots.slice(Math.ceil(timeSlots.length / 2)).map((slot) => {
-                    const rate = calculateRate(slot.current_count, event.capacity_per_slot);
-                    return (
-                      <View key={slot.id} style={styles.slotCard}>
-                        <View style={styles.slotHeader}>
-                          <Text style={styles.slotTime}>
-                            {formatTimeSlotDisplay(slot.start_time, slot.end_time)}
-                          </Text>
-                          <View
-                            style={[
-                              styles.slotStatusBadge,
-                              { backgroundColor: STATUS_COLORS[slot.status] },
-                            ]}
-                          >
-                            <Text style={styles.slotStatusBadgeText}>
-                              {STATUS_LABELS[slot.status]}
-                            </Text>
-                          </View>
-                        </View>
-                        <View style={styles.slotBody}>
-                          <Text style={styles.countText}>
-                            {slot.current_count} / {event.capacity_per_slot}
-                          </Text>
-                          <View style={styles.progressBarContainer}>
-                            <View
-                              style={[
-                                styles.progressBar,
-                                {
-                                  width: `${Math.min(rate, 100)}%`,
-                                  backgroundColor: rate >= 100 ? COLORS.ERROR : COLORS.PRIMARY,
-                                },
-                              ]}
-                            />
-                          </View>
-                          <Text style={styles.rateText}>{rate}%</Text>
-                        </View>
-                      </View>
-                    );
-                  })}
+              </View>
+              <Text style={styles.eventLocation}>{event.location}</Text>
+            </View>
+
+            {/* 選択中の日付の情報 */}
+            {selectedDate && (
+              <View style={styles.dateInfo}>
+                <Text style={styles.dateText}>{formatDateWithDay(selectedDate.date)}</Text>
+                <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[selectedDate.status] }]}>
+                  <Text style={styles.statusBadgeText}>{STATUS_LABELS[selectedDate.status]}</Text>
                 </View>
               </View>
             )}
           </View>
-        )}
 
-        {/* 順次案内制の状況表示 */}
-        {event.type === EVENT_TYPES.SEQUENTIAL && selectedDate && (
-          <View style={styles.statusSection}>
-            <Text style={styles.sectionTitle}>発券・呼び出し状況</Text>
-            <View style={styles.sequentialCard}>
-              <View style={styles.sequentialRow}>
-                <View style={styles.sequentialItem}>
-                  <Text style={styles.sequentialLabel}>現在の発券番号</Text>
-                  <Text style={styles.sequentialValue}>
-                    {(selectedDate.next_ticket_number || 1) - 1}
-                  </Text>
-                </View>
-                <View style={styles.sequentialItem}>
-                  <Text style={styles.sequentialLabel}>現在の呼び出し番号</Text>
-                  <Text style={styles.sequentialValue}>
-                    {callStatus?.current_call_number || 0}
-                  </Text>
+          {/* 右側：状況表示 */}
+          <View style={styles.rightPanel}>
+            {/* 時間枠定員制の状況表示 */}
+            {event.type === EVENT_TYPES.TIME_SLOT && (
+              <View style={styles.statusSection}>
+                <Text style={styles.sectionTitle}>時間枠ごとの発券状況</Text>
+                {isLoading ? (
+                  <ActivityIndicator size="small" color={COLORS.PRIMARY} />
+                ) : timeSlots.length === 0 ? (
+                  <Text style={styles.noDataText}>時間枠がありません</Text>
+                ) : (
+                  <View style={styles.timeSlotsGrid}>
+                    {/* 左列 */}
+                    <View style={styles.timeSlotsColumn}>
+                      {timeSlots.slice(0, Math.ceil(timeSlots.length / 2)).map((slot) => {
+                        const rate = calculateRate(slot.current_count, event.capacity_per_slot);
+                        return (
+                          <View key={slot.id} style={styles.slotCard}>
+                            <View style={styles.slotHeader}>
+                              <Text style={styles.slotTime}>
+                                {formatTimeSlotDisplay(slot.start_time, slot.end_time)}
+                              </Text>
+                              <View
+                                style={[
+                                  styles.slotStatusBadge,
+                                  { backgroundColor: STATUS_COLORS[slot.status] },
+                                ]}
+                              >
+                                <Text style={styles.slotStatusBadgeText}>
+                                  {STATUS_LABELS[slot.status]}
+                                </Text>
+                              </View>
+                            </View>
+                            <View style={styles.slotBody}>
+                              <Text style={styles.countText}>
+                                {slot.current_count} / {event.capacity_per_slot}
+                              </Text>
+                              <View style={styles.progressBarContainer}>
+                                <View
+                                  style={[
+                                    styles.progressBar,
+                                    {
+                                      width: `${Math.min(rate, 100)}%`,
+                                      backgroundColor: rate >= 100 ? COLORS.ERROR : COLORS.PRIMARY,
+                                    },
+                                  ]}
+                                />
+                              </View>
+                              <Text style={styles.rateText}>{rate}%</Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                    {/* 右列 */}
+                    <View style={styles.timeSlotsColumn}>
+                      {timeSlots.slice(Math.ceil(timeSlots.length / 2)).map((slot) => {
+                        const rate = calculateRate(slot.current_count, event.capacity_per_slot);
+                        return (
+                          <View key={slot.id} style={styles.slotCard}>
+                            <View style={styles.slotHeader}>
+                              <Text style={styles.slotTime}>
+                                {formatTimeSlotDisplay(slot.start_time, slot.end_time)}
+                              </Text>
+                              <View
+                                style={[
+                                  styles.slotStatusBadge,
+                                  { backgroundColor: STATUS_COLORS[slot.status] },
+                                ]}
+                              >
+                                <Text style={styles.slotStatusBadgeText}>
+                                  {STATUS_LABELS[slot.status]}
+                                </Text>
+                              </View>
+                            </View>
+                            <View style={styles.slotBody}>
+                              <Text style={styles.countText}>
+                                {slot.current_count} / {event.capacity_per_slot}
+                              </Text>
+                              <View style={styles.progressBarContainer}>
+                                <View
+                                  style={[
+                                    styles.progressBar,
+                                    {
+                                      width: `${Math.min(rate, 100)}%`,
+                                      backgroundColor: rate >= 100 ? COLORS.ERROR : COLORS.PRIMARY,
+                                    },
+                                  ]}
+                                />
+                              </View>
+                              <Text style={styles.rateText}>{rate}%</Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* 順次案内制の状況表示 */}
+            {event.type === EVENT_TYPES.SEQUENTIAL && selectedDate && (
+              <View style={styles.statusSection}>
+                <Text style={styles.sectionTitle}>発券・呼び出し状況</Text>
+                <View style={styles.sequentialCard}>
+                  <View style={styles.sequentialRow}>
+                    <View style={styles.sequentialItem}>
+                      <Text style={styles.sequentialLabel}>最後尾番号</Text>
+                      <Text style={styles.sequentialValue}>
+                        {(selectedDate.next_ticket_number || 1) - 1}
+                      </Text>
+                    </View>
+                    <View style={styles.sequentialItem}>
+                      <Text style={styles.sequentialLabel}>現在の呼び出し番号</Text>
+                      <Text style={styles.sequentialValue}>
+                        {callStatus?.current_call_number || 0}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.waitTimeContainer}>
+                    <Text style={styles.waitTimeLabel}>推定待ち時間</Text>
+                    <Text style={styles.waitTimeValue}>
+                      {formatWaitTime(
+                        calculateEstimatedWaitTime(
+                          selectedDate.next_ticket_number || 1,
+                          callStatus?.current_call_number || 0,
+                          event.estimated_wait_minutes || 5
+                        )
+                      )}
+                    </Text>
+                  </View>
                 </View>
               </View>
-              <View style={styles.waitTimeContainer}>
-                <Text style={styles.waitTimeLabel}>推定待ち時間</Text>
-                <Text style={styles.waitTimeValue}>
-                  {formatWaitTime(
-                    calculateEstimatedWaitTime(
-                      selectedDate.next_ticket_number || 1,
-                      callStatus?.current_call_number || 0,
-                      event.estimated_wait_minutes || 5
-                    )
-                  )}
-                </Text>
-              </View>
-            </View>
+            )}
           </View>
-        )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -401,6 +409,16 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: SPACING.MD,
+  },
+  mainRow: {
+    flexDirection: 'row',
+    gap: SPACING.MD,
+  },
+  leftPanel: {
+    flex: 1,
+  },
+  rightPanel: {
+    flex: 2,
   },
   eventInfo: {
     backgroundColor: COLORS.CARD_BACKGROUND,

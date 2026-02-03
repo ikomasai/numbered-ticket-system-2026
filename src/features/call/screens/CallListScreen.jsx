@@ -7,7 +7,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
-  FlatList,
+  ScrollView,
   StyleSheet,
   ActivityIndicator,
   SafeAreaView,
@@ -18,6 +18,8 @@ import {
   COLORS,
   FONT_SIZES,
   SPACING,
+  EVENT_TYPES,
+  EVENT_TYPE_LABELS,
 } from '../../../shared/constants';
 
 /**
@@ -105,6 +107,16 @@ const CallListScreen = ({ navigation }) => {
     );
   }, [events, filterName]);
 
+  /** 時間枠定員制の企画 */
+  const timeSlotEvents = useMemo(() => {
+    return filteredEvents.filter(event => event.type === EVENT_TYPES.TIME_SLOT);
+  }, [filteredEvents]);
+
+  /** 順次案内制の企画 */
+  const sequentialEvents = useMemo(() => {
+    return filteredEvents.filter(event => event.type === EVENT_TYPES.SEQUENTIAL);
+  }, [filteredEvents]);
+
   /**
    * 企画を選択して詳細画面に遷移
    * @param {Object} event - 選択された企画
@@ -112,18 +124,6 @@ const CallListScreen = ({ navigation }) => {
   const handleSelectEvent = (event) => {
     navigation.navigate('CallDetail', { event });
   };
-
-  /**
-   * 企画アイテムをレンダリング
-   * @param {Object} param0 - アイテム情報
-   * @returns {JSX.Element} 企画アイテム
-   */
-  const renderItem = ({ item }) => (
-    <EventListItem
-      event={item}
-      onPress={handleSelectEvent}
-    />
-  );
 
   // ローディング中
   if (isLoading) {
@@ -161,20 +161,56 @@ const CallListScreen = ({ navigation }) => {
         />
       </View>
 
-      {/* 企画一覧 */}
-      <FlatList
-        data={filteredEvents}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
+      {/* 企画一覧（タイプ別2列） */}
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.listContent}>
+        {filteredEvents.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>
               {filterName ? '該当する企画がありません' : '企画が登録されていません'}
             </Text>
           </View>
-        }
-      />
+        ) : (
+          <View style={styles.columnsContainer}>
+            {/* 時間枠定員制 */}
+            <View style={styles.column}>
+              <View style={styles.columnHeader}>
+                <Text style={styles.columnTitle}>{EVENT_TYPE_LABELS[EVENT_TYPES.TIME_SLOT]}</Text>
+                <Text style={styles.columnCount}>{timeSlotEvents.length}件</Text>
+              </View>
+              {timeSlotEvents.length === 0 ? (
+                <Text style={styles.columnEmptyText}>該当する企画がありません</Text>
+              ) : (
+                timeSlotEvents.map(event => (
+                  <EventListItem
+                    key={event.id}
+                    event={event}
+                    onPress={handleSelectEvent}
+                  />
+                ))
+              )}
+            </View>
+
+            {/* 順次案内制 */}
+            <View style={styles.column}>
+              <View style={styles.columnHeader}>
+                <Text style={styles.columnTitle}>{EVENT_TYPE_LABELS[EVENT_TYPES.SEQUENTIAL]}</Text>
+                <Text style={styles.columnCount}>{sequentialEvents.length}件</Text>
+              </View>
+              {sequentialEvents.length === 0 ? (
+                <Text style={styles.columnEmptyText}>該当する企画がありません</Text>
+              ) : (
+                sequentialEvents.map(event => (
+                  <EventListItem
+                    key={event.id}
+                    event={event}
+                    onPress={handleSelectEvent}
+                  />
+                ))
+              )}
+            </View>
+          </View>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -204,7 +240,41 @@ const styles = StyleSheet.create({
   filterInput: {
     marginBottom: 0,
   },
+  scrollView: {
+    flex: 1,
+  },
   listContent: {
+    padding: SPACING.MD,
+  },
+  columnsContainer: {
+    flexDirection: 'row',
+    gap: SPACING.MD,
+  },
+  column: {
+    flex: 1,
+  },
+  columnHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: COLORS.CARD_BACKGROUND,
+    padding: SPACING.MD,
+    borderRadius: 8,
+    marginBottom: SPACING.SM,
+  },
+  columnTitle: {
+    fontSize: FONT_SIZES.LG,
+    fontWeight: '600',
+    color: COLORS.TEXT,
+  },
+  columnCount: {
+    fontSize: FONT_SIZES.MD,
+    color: COLORS.TEXT_SECONDARY,
+  },
+  columnEmptyText: {
+    fontSize: FONT_SIZES.MD,
+    color: COLORS.TEXT_SECONDARY,
+    textAlign: 'center',
     padding: SPACING.MD,
   },
   centerContainer: {

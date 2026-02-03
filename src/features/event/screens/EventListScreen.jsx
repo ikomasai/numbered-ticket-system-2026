@@ -3,17 +3,18 @@
  * 登録済み企画の一覧表示・編集・削除を行う
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
   StyleSheet,
   Platform,
   Alert,
   ActivityIndicator,
   SafeAreaView,
+  RefreshControl,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useEvents } from '../hooks/useEvents';
@@ -22,6 +23,7 @@ import {
   COLORS,
   FONT_SIZES,
   SPACING,
+  EVENT_TYPES,
   EVENT_TYPE_LABELS,
   STATUS_LABELS,
   STATUS_COLORS,
@@ -44,6 +46,16 @@ const EventListScreen = () => {
       fetchEvents();
     }, [fetchEvents])
   );
+
+  /** 時間枠定員制の企画 */
+  const timeSlotEvents = useMemo(() => {
+    return events.filter(event => event.type === EVENT_TYPES.TIME_SLOT);
+  }, [events]);
+
+  /** 順次案内制の企画 */
+  const sequentialEvents = useMemo(() => {
+    return events.filter(event => event.type === EVENT_TYPES.SEQUENTIAL);
+  }, [events]);
 
   /**
    * 企画削除確認
@@ -93,10 +105,10 @@ const EventListScreen = () => {
 
   /**
    * 企画アイテムをレンダリング
-   * @param {Object} param0 - アイテム情報
+   * @param {Object} item - 企画データ
    * @returns {JSX.Element} 企画アイテム
    */
-  const renderEventItem = ({ item }) => {
+  const renderEventItem = (item) => {
     /** 開催日の一覧 */
     const dates = item.event_dates || [];
     /** 開催日表示テキスト */
@@ -142,7 +154,7 @@ const EventListScreen = () => {
             style={styles.editButton}
             onPress={() => navigation.navigate('EventEdit', { eventId: item.id })}
           >
-            <Text style={styles.editButtonText}>編集</Text>
+            <Text style={styles.editButtonText}>発券設定</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.deleteButton}
@@ -191,21 +203,57 @@ const EventListScreen = () => {
         />
       </View>
 
-      {events.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>登録されている企画がありません</Text>
-          <Text style={styles.emptySubText}>「新規登録」ボタンから企画を追加してください</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={events}
-          renderItem={renderEventItem}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          refreshing={isLoading}
-          onRefresh={fetchEvents}
-        />
-      )}
+      {/* 企画一覧（タイプ別2列） */}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl refreshing={isLoading} onRefresh={fetchEvents} />
+        }
+      >
+        {events.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>登録されている企画がありません</Text>
+            <Text style={styles.emptySubText}>「新規登録」ボタンから企画を追加してください</Text>
+          </View>
+        ) : (
+          <View style={styles.columnsContainer}>
+            {/* 時間枠定員制 */}
+            <View style={styles.column}>
+              <View style={styles.columnHeader}>
+                <Text style={styles.columnTitle}>{EVENT_TYPE_LABELS[EVENT_TYPES.TIME_SLOT]}</Text>
+                <Text style={styles.columnCount}>{timeSlotEvents.length}件</Text>
+              </View>
+              {timeSlotEvents.length === 0 ? (
+                <Text style={styles.columnEmptyText}>該当する企画がありません</Text>
+              ) : (
+                timeSlotEvents.map(event => (
+                  <View key={event.id}>
+                    {renderEventItem(event)}
+                  </View>
+                ))
+              )}
+            </View>
+
+            {/* 順次案内制 */}
+            <View style={styles.column}>
+              <View style={styles.columnHeader}>
+                <Text style={styles.columnTitle}>{EVENT_TYPE_LABELS[EVENT_TYPES.SEQUENTIAL]}</Text>
+                <Text style={styles.columnCount}>{sequentialEvents.length}件</Text>
+              </View>
+              {sequentialEvents.length === 0 ? (
+                <Text style={styles.columnEmptyText}>該当する企画がありません</Text>
+              ) : (
+                sequentialEvents.map(event => (
+                  <View key={event.id}>
+                    {renderEventItem(event)}
+                  </View>
+                ))
+              )}
+            </View>
+          </View>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -232,7 +280,41 @@ const styles = StyleSheet.create({
   createButton: {
     paddingHorizontal: SPACING.MD,
   },
+  scrollView: {
+    flex: 1,
+  },
   listContent: {
+    padding: SPACING.MD,
+  },
+  columnsContainer: {
+    flexDirection: 'row',
+    gap: SPACING.MD,
+  },
+  column: {
+    flex: 1,
+  },
+  columnHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: COLORS.CARD_BACKGROUND,
+    padding: SPACING.MD,
+    borderRadius: 8,
+    marginBottom: SPACING.SM,
+  },
+  columnTitle: {
+    fontSize: FONT_SIZES.LG,
+    fontWeight: '600',
+    color: COLORS.TEXT,
+  },
+  columnCount: {
+    fontSize: FONT_SIZES.MD,
+    color: COLORS.TEXT_SECONDARY,
+  },
+  columnEmptyText: {
+    fontSize: FONT_SIZES.MD,
+    color: COLORS.TEXT_SECONDARY,
+    textAlign: 'center',
     padding: SPACING.MD,
   },
   eventCard: {
@@ -315,7 +397,7 @@ const styles = StyleSheet.create({
     marginRight: SPACING.SM,
   },
   editButtonText: {
-    fontSize: FONT_SIZES.MD,
+    fontSize: FONT_SIZES.LG,
     color: COLORS.PRIMARY,
     fontWeight: '600',
   },
@@ -324,7 +406,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.SM,
   },
   deleteButtonText: {
-    fontSize: FONT_SIZES.MD,
+    fontSize: FONT_SIZES.LG,
     color: COLORS.ERROR,
     fontWeight: '600',
   },
