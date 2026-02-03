@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.MD,
   },
   label: {
-    fontSize: FONT_SIZES.MD,
+    fontSize: FONT_SIZES.LG,
     fontWeight: '600',
     color: COLORS.TEXT,
     marginBottom: SPACING.XS,

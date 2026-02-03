@@ -52,6 +52,8 @@ const EventEditScreen = () => {
   const [estimatedWaitMinutes, setEstimatedWaitMinutes] = useState('');
   /** 送信中状態 */
   const [isSubmitting, setIsSubmitting] = useState(false);
+  /** ステータス更新中状態 */
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   /** バリデーションエラー */
   const [errors, setErrors] = useState({});
 
@@ -145,19 +147,40 @@ const EventEditScreen = () => {
 
   /**
    * 開催日のステータスを変更
+   * 時間枠定員制の場合、満員・発券停止中以外の時間枠も一括で変更
    * @param {string} eventDateId - 企画開催日ID
    * @param {string} newStatus - 新しいステータス
    */
   const handleDateStatusChange = async (eventDateId, newStatus) => {
-    const { success } = await changeEventDateStatus(eventDateId, newStatus);
-    if (success) {
-      fetchEvent();
-    } else {
-      if (Platform.OS === 'web') {
-        window.alert('ステータスの更新に失敗しました');
-      } else {
-        Alert.alert('エラー', 'ステータスの更新に失敗しました');
+    setIsUpdatingStatus(true);
+
+    try {
+      const { success } = await changeEventDateStatus(eventDateId, newStatus);
+      if (!success) {
+        if (Platform.OS === 'web') {
+          window.alert('ステータスの更新に失敗しました');
+        } else {
+          Alert.alert('エラー', 'ステータスの更新に失敗しました');
+        }
+        return;
       }
+
+      // 時間枠定員制の場合、該当日の時間枠ステータスも一括更新
+      if (event?.type === EVENT_TYPES.TIME_SLOT) {
+        const targetDate = event.event_dates?.find(d => d.id === eventDateId);
+        if (targetDate?.time_slots) {
+          // 満員・発券停止中以外の時間枠を更新
+          const updatePromises = targetDate.time_slots
+            .filter(slot => slot.status !== STATUS.FULL && slot.status !== STATUS.PAUSED)
+            .map(slot => changeTimeSlotStatus(slot.id, newStatus));
+
+          await Promise.all(updatePromises);
+        }
+      }
+
+      await fetchEvent();
+    } finally {
+      setIsUpdatingStatus(false);
     }
   };
 
@@ -167,15 +190,21 @@ const EventEditScreen = () => {
    * @param {string} newStatus - 新しいステータス
    */
   const handleTimeSlotStatusChange = async (timeSlotId, newStatus) => {
-    const { success } = await changeTimeSlotStatus(timeSlotId, newStatus);
-    if (success) {
-      fetchEvent();
-    } else {
-      if (Platform.OS === 'web') {
-        window.alert('ステータスの更新に失敗しました');
+    setIsUpdatingStatus(true);
+
+    try {
+      const { success } = await changeTimeSlotStatus(timeSlotId, newStatus);
+      if (success) {
+        await fetchEvent();
       } else {
-        Alert.alert('エラー', 'ステータスの更新に失敗しました');
+        if (Platform.OS === 'web') {
+          window.alert('ステータスの更新に失敗しました');
+        } else {
+          Alert.alert('エラー', 'ステータスの更新に失敗しました');
+        }
       }
+    } finally {
+      setIsUpdatingStatus(false);
     }
   };
 
@@ -211,52 +240,60 @@ const EventEditScreen = () => {
         </View>
 
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
-          <TextInput
-            label="企画名"
-            value={name}
-            onChangeText={setName}
-            placeholder="例：お化け屋敷"
-            error={errors.name}
-          />
+          {/* 上部：企画情報と開催日ステータスを横並び */}
+          <View style={styles.topRow}>
+            {/* 左側：企画情報入力 */}
+            <View style={styles.leftColumn}>
+              <TextInput
+                label="企画名"
+                value={name}
+                onChangeText={setName}
+                placeholder="例：お化け屋敷"
+                error={errors.name}
+              />
 
-          <TextInput
-            label="企画場所"
-            value={location}
-            onChangeText={setLocation}
-            placeholder="例：1号館3階 301教室"
-            error={errors.location}
-          />
+              <TextInput
+                label="企画場所"
+                value={location}
+                onChangeText={setLocation}
+                placeholder="例：1号館3階 301教室"
+                error={errors.location}
+              />
 
-          {event.type === EVENT_TYPES.SEQUENTIAL && (
-            <TextInput
-              label="1番号あたりの推定待ち時間（分）"
-              value={estimatedWaitMinutes}
-              onChangeText={setEstimatedWaitMinutes}
-              placeholder="例：5"
-              keyboardType="numeric"
-              error={errors.estimatedWaitMinutes}
-            />
-          )}
-
-          {/* 開催日ごとのステータス管理 */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>開催日ステータス</Text>
-            {event.event_dates?.map((dateItem) => (
-              <View key={dateItem.id} style={styles.dateStatusItem}>
-                <View style={styles.dateLabelContainer}>
-                  <Text style={styles.dateLabel}>{formatDateWithDay(dateItem.date)}</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[dateItem.status] }]}>
-                    <Text style={styles.statusBadgeText}>{STATUS_LABELS[dateItem.status]}</Text>
-                  </View>
-                </View>
-                <Select
-                  value={dateItem.status}
-                  onValueChange={(newStatus) => handleDateStatusChange(dateItem.id, newStatus)}
-                  options={statusOptions}
-                  style={styles.statusSelect}
+              {event.type === EVENT_TYPES.SEQUENTIAL && (
+                <TextInput
+                  label="1番号あたりの推定待ち時間（分）"
+                  value={estimatedWaitMinutes}
+                  onChangeText={setEstimatedWaitMinutes}
+                  placeholder="例：5"
+                  keyboardType="numeric"
+                  error={errors.estimatedWaitMinutes}
                 />
+              )}
+            </View>
+
+            {/* 右側：開催日ステータス */}
+            <View style={styles.rightColumn}>
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>開催日ステータス</Text>
+                {event.event_dates?.map((dateItem) => (
+                  <View key={dateItem.id} style={styles.dateStatusItem}>
+                    <View style={styles.dateLabelContainer}>
+                      <Text style={styles.dateLabel}>{formatDateWithDay(dateItem.date)}</Text>
+                      <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[dateItem.status] }]}>
+                        <Text style={styles.statusBadgeText}>{STATUS_LABELS[dateItem.status]}</Text>
+                      </View>
+                    </View>
+                    <Select
+                      value={dateItem.status}
+                      onValueChange={(newStatus) => handleDateStatusChange(dateItem.id, newStatus)}
+                      options={statusOptions}
+                      style={styles.dateStatusSelect}
+                    />
+                  </View>
+                ))}
               </View>
-            ))}
+            </View>
           </View>
 
           {/* 時間枠定員制の場合は時間枠ごとのステータス管理 */}
@@ -349,6 +386,16 @@ const EventEditScreen = () => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* ステータス更新中のオーバーレイ */}
+      {isUpdatingStatus && (
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="large" color={COLORS.PRIMARY} />
+            <Text style={styles.loadingOverlayText}>ステータスを更新中...</Text>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -383,9 +430,21 @@ const styles = StyleSheet.create({
   content: {
     padding: SPACING.MD,
   },
-  section: {
-    marginTop: SPACING.MD,
+  topRow: {
+    flexDirection: 'row',
+    gap: SPACING.LG,
     marginBottom: SPACING.MD,
+  },
+  leftColumn: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  rightColumn: {
+    flex: 1,
+  },
+  section: {
+    marginTop: 0,
+    marginBottom: 0,
     padding: SPACING.MD,
     backgroundColor: COLORS.CARD_BACKGROUND,
     borderRadius: 8,
@@ -412,7 +471,11 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.BORDER,
   },
   dateLabelContainer: {
-    flex: 1,
+    flexShrink: 0,
+  },
+  dateStatusSelect: {
+    width: 160,
+    marginBottom: 0,
   },
   dateLabel: {
     fontSize: FONT_SIZES.LG,
@@ -443,7 +506,7 @@ const styles = StyleSheet.create({
   },
   timeSlotsGrid: {
     flexDirection: 'row',
-    gap: SPACING.LG,
+    gap: 28,
     width: '95%',
     alignSelf: 'center',
   },
