@@ -115,8 +115,8 @@ export const MEDIUM_TYPE_LABELS = {
 export const COLORS = {
   /** プライマリカラー */
   PRIMARY: '#007AFF',
-  /** セカンダリカラー */
-  SECONDARY: '#5856D6',
+  /** セカンダリカラー（色盲対応：オレンジ系） */
+  SECONDARY: '#FF8C00',
   /** 成功 */
   SUCCESS: '#34C759',
   /** 警告 */

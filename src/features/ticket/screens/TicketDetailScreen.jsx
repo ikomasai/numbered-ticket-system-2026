@@ -604,8 +604,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.PRIMARY + '10',
   },
   timeSlotItemDisabled: {
-    backgroundColor: '#E5E5E5',
-    opacity: 0.6,
+    backgroundColor: COLORS.DISABLED,
     borderColor: 'transparent',
   },
   timeSlotTime: {
