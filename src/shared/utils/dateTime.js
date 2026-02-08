@@ -29,12 +29,14 @@ export const minutesToTime = (minutes) => {
 /**
  * 時間枠を生成
  * @param {number} slotDurationMinutes - 1枠あたりの時間（分）
+ * @param {string} [startTime] - 開始時刻（HH:MM形式、省略時は環境変数のデフォルト）
+ * @param {string} [endTime] - 終了時刻（HH:MM形式、省略時は環境変数のデフォルト）
  * @returns {Array<{startTime: string, endTime: string}>} 時間枠の配列
  */
-export const generateTimeSlots = (slotDurationMinutes) => {
+export const generateTimeSlots = (slotDurationMinutes, startTime, endTime) => {
   const slots = [];
-  const startMinutes = timeToMinutes(EVENT_START_TIME);
-  const endMinutes = timeToMinutes(EVENT_END_TIME);
+  const startMinutes = timeToMinutes(startTime || EVENT_START_TIME);
+  const endMinutes = timeToMinutes(endTime || EVENT_END_TIME);
 
   let currentMinutes = startMinutes;
   while (currentMinutes + slotDurationMinutes <= endMinutes) {

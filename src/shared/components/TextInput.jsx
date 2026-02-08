@@ -36,7 +36,7 @@ const TextInput = ({
 }) => {
   return (
     <View style={[styles.container, style]}>
-      {label && <Text style={styles.label}>{label}</Text>}
+      {label ? <Text style={styles.label}>{label}</Text> : null}
       <RNTextInput
         style={[
           styles.input,

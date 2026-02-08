@@ -24,6 +24,8 @@ import {
   STATUS,
   STATUS_LABELS,
   STATUS_COLORS,
+  SLOT_THRESHOLDS,
+  SLOT_STATUS_COLORS,
 } from '../../../shared/constants';
 import {
   formatDateWithDay,
@@ -31,6 +33,22 @@ import {
   calculateEstimatedWaitTime,
   formatWaitTime,
 } from '../../../shared/utils/dateTime';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
+
+/**
+ * 定員に対する現在の人数から色を取得
+ * @param {number} currentCount - 現在の人数
+ * @param {number} capacity - 定員
+ * @returns {string} 表示色
+ */
+const getSlotStatusColor = (currentCount, capacity) => {
+  const rate = (currentCount / capacity) * 100;
+  if (rate <= SLOT_THRESHOLDS.LOW) return SLOT_STATUS_COLORS.VERY_LOW;
+  if (rate <= SLOT_THRESHOLDS.MEDIUM) return SLOT_STATUS_COLORS.LOW;
+  if (rate <= SLOT_THRESHOLDS.HIGH) return SLOT_STATUS_COLORS.MEDIUM;
+  if (rate <= SLOT_THRESHOLDS.VERY_HIGH) return SLOT_STATUS_COLORS.HIGH;
+  return SLOT_STATUS_COLORS.VERY_HIGH;
+};
 
 /**
  * 状況確認詳細画面コンポーネント
@@ -40,6 +58,7 @@ import {
  * @returns {JSX.Element} 状況確認詳細画面
  */
 const StatusDetailScreen = ({ route, navigation }) => {
+  const { isMobile } = useResponsive();
   /** ルートパラメータから企画情報を取得 */
   const { event: initialEvent } = route.params;
 
@@ -229,9 +248,9 @@ const StatusDetailScreen = ({ route, navigation }) => {
           <RefreshControl refreshing={isRefreshing} onRefresh={refreshData} />
         }
       >
-        <View style={styles.mainRow}>
+        <View style={[styles.mainRow, isMobile && styles.mainRowMobile]}>
           {/* 左側：企画情報・日付 */}
-          <View style={styles.leftPanel}>
+          <View style={[styles.leftPanel, isMobile && styles.panelMobile]}>
             {/* 企画情報 */}
             <View style={styles.eventInfo}>
               <View style={styles.eventHeader}>
@@ -260,7 +279,7 @@ const StatusDetailScreen = ({ route, navigation }) => {
           </View>
 
           {/* 右側：状況表示 */}
-          <View style={styles.rightPanel}>
+          <View style={[styles.rightPanel, isMobile && styles.panelMobile]}>
             {/* 時間枠定員制の状況表示 */}
             {event.type === EVENT_TYPES.TIME_SLOT && (
               <View style={styles.statusSection}>
@@ -270,11 +289,12 @@ const StatusDetailScreen = ({ route, navigation }) => {
                 ) : timeSlots.length === 0 ? (
                   <Text style={styles.noDataText}>時間枠がありません</Text>
                 ) : (
-                  <View style={styles.timeSlotsGrid}>
+                  <View style={[styles.timeSlotsGrid, isMobile && styles.timeSlotsGridMobile]}>
                     {/* 左列 */}
-                    <View style={styles.timeSlotsColumn}>
+                    <View style={[styles.timeSlotsColumn, isMobile && styles.timeSlotsColumnMobile]}>
                       {timeSlots.slice(0, Math.ceil(timeSlots.length / 2)).map((slot) => {
                         const rate = calculateRate(slot.current_count, event.capacity_per_slot);
+                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot);
                         return (
                           <View key={slot.id} style={styles.slotCard}>
                             <View style={styles.slotHeader}>
@@ -293,16 +313,21 @@ const StatusDetailScreen = ({ route, navigation }) => {
                               </View>
                             </View>
                             <View style={styles.slotBody}>
-                              <Text style={styles.countText}>
-                                {slot.current_count} / {event.capacity_per_slot}
-                              </Text>
+                              <View style={styles.countRow}>
+                                <Text style={[styles.countCurrent, { color: statusColor }]}>
+                                  {slot.current_count}
+                                </Text>
+                                <Text style={styles.countText}>
+                                  / {event.capacity_per_slot}
+                                </Text>
+                              </View>
                               <View style={styles.progressBarContainer}>
                                 <View
                                   style={[
                                     styles.progressBar,
                                     {
                                       width: `${Math.min(rate, 100)}%`,
-                                      backgroundColor: rate >= 100 ? COLORS.ERROR : COLORS.PRIMARY,
+                                      backgroundColor: statusColor,
                                     },
                                   ]}
                                 />
@@ -314,9 +339,10 @@ const StatusDetailScreen = ({ route, navigation }) => {
                       })}
                     </View>
                     {/* 右列 */}
-                    <View style={styles.timeSlotsColumn}>
+                    <View style={[styles.timeSlotsColumn, isMobile && styles.timeSlotsColumnMobile]}>
                       {timeSlots.slice(Math.ceil(timeSlots.length / 2)).map((slot) => {
                         const rate = calculateRate(slot.current_count, event.capacity_per_slot);
+                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot);
                         return (
                           <View key={slot.id} style={styles.slotCard}>
                             <View style={styles.slotHeader}>
@@ -335,16 +361,21 @@ const StatusDetailScreen = ({ route, navigation }) => {
                               </View>
                             </View>
                             <View style={styles.slotBody}>
-                              <Text style={styles.countText}>
-                                {slot.current_count} / {event.capacity_per_slot}
-                              </Text>
+                              <View style={styles.countRow}>
+                                <Text style={[styles.countCurrent, { color: statusColor }]}>
+                                  {slot.current_count}
+                                </Text>
+                                <Text style={styles.countText}>
+                                  / {event.capacity_per_slot}
+                                </Text>
+                              </View>
                               <View style={styles.progressBarContainer}>
                                 <View
                                   style={[
                                     styles.progressBar,
                                     {
                                       width: `${Math.min(rate, 100)}%`,
-                                      backgroundColor: rate >= 100 ? COLORS.ERROR : COLORS.PRIMARY,
+                                      backgroundColor: statusColor,
                                     },
                                   ]}
                                 />
@@ -414,11 +445,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: SPACING.MD,
   },
+  /** スマホ用: 縦並び */
+  mainRowMobile: {
+    flexDirection: 'column',
+  },
   leftPanel: {
     flex: 1,
   },
   rightPanel: {
     flex: 2,
+  },
+  /** スマホ用: パネル（幅100%） */
+  panelMobile: {
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: 'auto',
+    width: '100%',
+    marginBottom: SPACING.MD,
   },
   eventInfo: {
     backgroundColor: COLORS.CARD_BACKGROUND,
@@ -487,8 +530,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: SPACING.SM,
   },
+  /** スマホ用: 時間枠1列 */
+  timeSlotsGridMobile: {
+    flexDirection: 'column',
+  },
   timeSlotsColumn: {
     flex: 1,
+  },
+  /** スマホ用: 時間枠列（幅100%） */
+  timeSlotsColumnMobile: {
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: 'auto',
+    width: '100%',
   },
   sectionTitle: {
     fontSize: FONT_SIZES.LG,
@@ -533,10 +587,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  countRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    width: 70,
+  },
+  countCurrent: {
+    fontSize: FONT_SIZES.LG,
+    fontWeight: 'bold',
+  },
   countText: {
     fontSize: FONT_SIZES.MD,
     color: COLORS.TEXT,
-    width: 70,
   },
   progressBarContainer: {
     flex: 1,

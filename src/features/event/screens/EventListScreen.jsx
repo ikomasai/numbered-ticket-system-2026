@@ -29,12 +29,14 @@ import {
   STATUS_COLORS,
 } from '../../../shared/constants';
 import { formatDateWithDay } from '../../../shared/utils/dateTime';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 
 /**
  * 企画一覧画面コンポーネント
  * @returns {JSX.Element} 企画一覧画面
  */
 const EventListScreen = () => {
+  const { isMobile } = useResponsive();
   const navigation = useNavigation();
   const { events, isLoading, error, fetchEvents, removeEvent } = useEvents();
   /** 削除処理中の企画ID */
@@ -217,9 +219,9 @@ const EventListScreen = () => {
             <Text style={styles.emptySubText}>「新規登録」ボタンから企画を追加してください</Text>
           </View>
         ) : (
-          <View style={styles.columnsContainer}>
+          <View style={[styles.columnsContainer, isMobile && styles.columnsContainerMobile]}>
             {/* 時間枠定員制 */}
-            <View style={styles.column}>
+            <View style={[styles.column, isMobile && styles.columnMobile]}>
               <View style={styles.columnHeader}>
                 <Text style={styles.columnTitle}>{EVENT_TYPE_LABELS[EVENT_TYPES.TIME_SLOT]}</Text>
                 <Text style={styles.columnCount}>{timeSlotEvents.length}件</Text>
@@ -236,7 +238,7 @@ const EventListScreen = () => {
             </View>
 
             {/* 順次案内制 */}
-            <View style={styles.column}>
+            <View style={[styles.column, isMobile && styles.columnMobile]}>
               <View style={styles.columnHeader}>
                 <Text style={styles.columnTitle}>{EVENT_TYPE_LABELS[EVENT_TYPES.SEQUENTIAL]}</Text>
                 <Text style={styles.columnCount}>{sequentialEvents.length}件</Text>
@@ -290,8 +292,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: SPACING.MD,
   },
+  /** スマホ用: 1列縦並び */
+  columnsContainerMobile: {
+    flexDirection: 'column',
+    gap: 0,
+  },
   column: {
     flex: 1,
+  },
+  /** スマホ用: 各列（幅100%、縦並び） */
+  columnMobile: {
+    flex: 0,
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: 'auto',
+    width: '100%',
+    marginBottom: SPACING.LG,
   },
   columnHeader: {
     flexDirection: 'row',
@@ -322,10 +338,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: SPACING.MD,
     marginBottom: SPACING.MD,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
     elevation: 3,
   },
   eventHeader: {

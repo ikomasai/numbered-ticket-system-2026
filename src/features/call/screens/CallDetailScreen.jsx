@@ -29,6 +29,7 @@ import {
   STATUS_COLORS,
 } from '../../../shared/constants';
 import { formatDateWithDay, formatTimeSlotDisplay } from '../../../shared/utils/dateTime';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 
 /**
  * 呼び出し詳細画面コンポーネント
@@ -38,6 +39,7 @@ import { formatDateWithDay, formatTimeSlotDisplay } from '../../../shared/utils/
  * @returns {JSX.Element} 呼び出し詳細画面
  */
 const CallDetailScreen = ({ route, navigation }) => {
+  const { isMobile } = useResponsive();
   /** ルートパラメータから企画情報を取得 */
   const { event: initialEvent } = route.params;
 
@@ -303,9 +305,9 @@ const CallDetailScreen = ({ route, navigation }) => {
 
       {/* メインコンテンツ */}
       <ScrollView style={styles.content}>
-        <View style={styles.mainRow}>
+        <View style={[styles.mainRow, isMobile && styles.mainRowMobile]}>
           {/* 左側：企画情報・日付・操作パネル */}
-          <View style={styles.leftPanel}>
+          <View style={[styles.leftPanel, isMobile && styles.panelMobile]}>
             {/* 企画情報 */}
             <View style={styles.eventInfo}>
               <View style={styles.eventHeader}>
@@ -375,17 +377,17 @@ const CallDetailScreen = ({ route, navigation }) => {
           </View>
 
           {/* 右側：時間枠選択または順次案内制の情報 */}
-          <View style={styles.rightPanel}>
+          <View style={[styles.rightPanel, isMobile && styles.panelMobile]}>
             {/* 時間枠定員制の場合 */}
             {event.type === EVENT_TYPES.TIME_SLOT && isDateActive && (
-              <View style={styles.timeSlotsContainer}>
+              <View style={[styles.timeSlotsContainer, isMobile && styles.timeSlotsContainerMobile]}>
                 <Text style={styles.sectionTitle}>時間枠を選択して呼び出し</Text>
                 {isLoading ? (
                   <ActivityIndicator size="small" color={COLORS.PRIMARY} />
                 ) : timeSlots.length > 0 ? (
-                  <View style={styles.timeSlotsGrid}>
+                  <View style={[styles.timeSlotsGrid, isMobile && styles.timeSlotsGridMobile]}>
                     {/* 左列 */}
-                    <View style={styles.timeSlotsColumn}>
+                    <View style={[styles.timeSlotsColumn, isMobile && styles.timeSlotsColumnMobile]}>
                       {timeSlots.slice(0, Math.ceil(timeSlots.length / 2)).map(slot => {
                         const isSlotSelected = selectedTimeSlot?.id === slot.id;
 
@@ -409,7 +411,7 @@ const CallDetailScreen = ({ route, navigation }) => {
                       })}
                     </View>
                     {/* 右列 */}
-                    <View style={styles.timeSlotsColumn}>
+                    <View style={[styles.timeSlotsColumn, isMobile && styles.timeSlotsColumnMobile]}>
                       {timeSlots.slice(Math.ceil(timeSlots.length / 2)).map(slot => {
                         const isSlotSelected = selectedTimeSlot?.id === slot.id;
 
@@ -515,11 +517,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: SPACING.MD,
   },
+  /** スマホ用: 縦並び */
+  mainRowMobile: {
+    flexDirection: 'column',
+  },
   leftPanel: {
     flex: 1,
   },
   rightPanel: {
     flex: 2,
+  },
+  /** スマホ用: パネル（幅100%） */
+  panelMobile: {
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: 'auto',
+    width: '100%',
+    marginBottom: SPACING.MD,
   },
   eventInfo: {
     backgroundColor: COLORS.CARD_BACKGROUND,
@@ -603,6 +617,12 @@ const styles = StyleSheet.create({
     padding: SPACING.MD,
     borderRadius: 12,
   },
+  /** スマホ用: 時間枠コンテナ（コンテンツに合わせてサイズ） */
+  timeSlotsContainerMobile: {
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: 'auto',
+  },
   operationPanel: {
     backgroundColor: COLORS.CARD_BACKGROUND,
     padding: SPACING.MD,
@@ -612,8 +632,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: SPACING.SM,
   },
+  /** スマホ用: 時間枠1列 */
+  timeSlotsGridMobile: {
+    flexDirection: 'column',
+  },
   timeSlotsColumn: {
     flex: 1,
+  },
+  /** スマホ用: 時間枠列（幅100%） */
+  timeSlotsColumnMobile: {
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: 'auto',
+    width: '100%',
   },
   timeSlotItem: {
     flexDirection: 'row',

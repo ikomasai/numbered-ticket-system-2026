@@ -22,6 +22,7 @@ import {
   EVENT_TYPES,
   EVENT_TYPE_LABELS,
 } from '../../../shared/constants';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 
 /**
  * 状況確認企画一覧画面コンポーネント
@@ -30,6 +31,7 @@ import {
  * @returns {JSX.Element} 状況確認企画一覧画面
  */
 const StatusListScreen = ({ navigation }) => {
+  const { isMobile } = useResponsive();
   /** 企画一覧 */
   const [events, setEvents] = useState([]);
   /** ローディング状態 */
@@ -191,9 +193,9 @@ const StatusListScreen = ({ navigation }) => {
             </Text>
           </View>
         ) : (
-          <View style={styles.columnsContainer}>
+          <View style={[styles.columnsContainer, isMobile && styles.columnsContainerMobile]}>
             {/* 時間枠定員制 */}
-            <View style={styles.column}>
+            <View style={[styles.column, isMobile && styles.columnMobile]}>
               <View style={styles.columnHeader}>
                 <Text style={styles.columnTitle}>{EVENT_TYPE_LABELS[EVENT_TYPES.TIME_SLOT]}</Text>
                 <Text style={styles.columnCount}>{timeSlotEvents.length}件</Text>
@@ -212,7 +214,7 @@ const StatusListScreen = ({ navigation }) => {
             </View>
 
             {/* 順次案内制 */}
-            <View style={styles.column}>
+            <View style={[styles.column, isMobile && styles.columnMobile]}>
               <View style={styles.columnHeader}>
                 <Text style={styles.columnTitle}>{EVENT_TYPE_LABELS[EVENT_TYPES.SEQUENTIAL]}</Text>
                 <Text style={styles.columnCount}>{sequentialEvents.length}件</Text>
@@ -267,12 +269,28 @@ const styles = StyleSheet.create({
   listContent: {
     padding: SPACING.MD,
   },
+  /** PC用: 2列横並び */
   columnsContainer: {
     flexDirection: 'row',
     gap: SPACING.MD,
   },
+  /** スマホ用: 1列縦並び */
+  columnsContainerMobile: {
+    flexDirection: 'column',
+    gap: 0,
+  },
+  /** PC用: 各列 */
   column: {
     flex: 1,
+  },
+  /** スマホ用: 各列（幅100%、縦並び） */
+  columnMobile: {
+    flex: 0,
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: 'auto',
+    width: '100%',
+    marginBottom: SPACING.LG,
   },
   columnHeader: {
     flexDirection: 'row',

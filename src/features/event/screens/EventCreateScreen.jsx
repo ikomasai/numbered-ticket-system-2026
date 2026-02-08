@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useEvents } from '../hooks/useEvents';
-import { Button, TextInput, RadioGroup, CheckboxGroup } from '../../../shared/components';
+import { Button, TextInput, RadioGroup, Checkbox } from '../../../shared/components';
 import {
   COLORS,
   FONT_SIZES,
@@ -26,8 +26,11 @@ import {
   EVENT_TYPES,
   EVENT_TYPE_LABELS,
   FESTIVAL_DATES,
+  EVENT_START_TIME,
+  EVENT_END_TIME,
 } from '../../../shared/constants';
 import { formatDateWithDay } from '../../../shared/utils/dateTime';
+import { toHalfWidth } from '../../../shared/utils/validation';
 
 /**
  * 企画登録画面コンポーネント
@@ -49,8 +52,9 @@ const EventCreateScreen = () => {
   const [slotDurationMinutes, setSlotDurationMinutes] = useState('');
   /** 1番号あたりの推定待ち時間（分） */
   const [estimatedWaitMinutes, setEstimatedWaitMinutes] = useState('');
-  /** 選択された開催日 */
+  /** 選択された開催日（日付・開始時刻・終了時刻を含むオブジェクト配列） */
   const [selectedDates, setSelectedDates] = useState([]);
+  // selectedDates: [{ date: '2024-11-02', startTime: '10:00', endTime: '19:00' }, ...]
   /** 送信中状態 */
   const [isSubmitting, setIsSubmitting] = useState(false);
   /** バリデーションエラー */
@@ -74,11 +78,44 @@ const EventCreateScreen = () => {
     },
   ];
 
-  /** 開催日の選択肢 */
-  const dateOptions = FESTIVAL_DATES.map(date => ({
-    label: formatDateWithDay(date),
-    value: date,
-  }));
+  /**
+   * 開催日のチェック状態をトグル
+   * @param {string} date - 日付文字列（YYYY-MM-DD形式）
+   * @param {boolean} isChecked - チェック状態
+   */
+  const handleDateToggle = (date, isChecked) => {
+    if (isChecked) {
+      setSelectedDates([...selectedDates, {
+        date,
+        startTime: EVENT_START_TIME,
+        endTime: EVENT_END_TIME,
+      }]);
+    } else {
+      setSelectedDates(selectedDates.filter(d => d.date !== date));
+    }
+  };
+
+  /**
+   * 開催日の開始時刻を変更
+   * @param {string} date - 日付文字列
+   * @param {string} newStartTime - 新しい開始時刻
+   */
+  const handleStartTimeChange = (date, newStartTime) => {
+    setSelectedDates(selectedDates.map(d =>
+      d.date === date ? { ...d, startTime: newStartTime } : d
+    ));
+  };
+
+  /**
+   * 開催日の終了時刻を変更
+   * @param {string} date - 日付文字列
+   * @param {string} newEndTime - 新しい終了時刻
+   */
+  const handleEndTimeChange = (date, newEndTime) => {
+    setSelectedDates(selectedDates.map(d =>
+      d.date === date ? { ...d, endTime: newEndTime } : d
+    ));
+  };
 
   /**
    * バリデーション
@@ -140,7 +177,7 @@ const EventCreateScreen = () => {
       capacityPerSlot: type === EVENT_TYPES.TIME_SLOT ? parseInt(capacityPerSlot, 10) : null,
       slotDurationMinutes: type === EVENT_TYPES.TIME_SLOT ? parseInt(slotDurationMinutes, 10) : null,
       estimatedWaitMinutes: type === EVENT_TYPES.SEQUENTIAL ? parseInt(estimatedWaitMinutes, 10) : null,
-      dates: selectedDates,
+      dates: selectedDates, // [{ date, startTime, endTime }, ...]
     };
 
     const { success, error } = await addEvent(eventData);
@@ -208,7 +245,7 @@ const EventCreateScreen = () => {
               <TextInput
                 label="1枠あたりの定員"
                 value={capacityPerSlot}
-                onChangeText={setCapacityPerSlot}
+                onChangeText={(val) => setCapacityPerSlot(toHalfWidth(val))}
                 placeholder="例：20"
                 keyboardType="numeric"
                 error={errors.capacityPerSlot}
@@ -217,7 +254,7 @@ const EventCreateScreen = () => {
               <TextInput
                 label="1枠あたりの時間（分）"
                 value={slotDurationMinutes}
-                onChangeText={setSlotDurationMinutes}
+                onChangeText={(val) => setSlotDurationMinutes(toHalfWidth(val))}
                 placeholder="例：30"
                 keyboardType="numeric"
                 error={errors.slotDurationMinutes}
@@ -229,19 +266,50 @@ const EventCreateScreen = () => {
             <TextInput
               label="1番号あたりの推定待ち時間（分）"
               value={estimatedWaitMinutes}
-              onChangeText={setEstimatedWaitMinutes}
+              onChangeText={(val) => setEstimatedWaitMinutes(toHalfWidth(val))}
               placeholder="例：5"
               keyboardType="numeric"
               error={errors.estimatedWaitMinutes}
             />
           )}
 
-          <CheckboxGroup
-            label="開催日"
-            options={dateOptions}
-            selectedValues={selectedDates}
-            onValuesChange={setSelectedDates}
-          />
+          <View style={styles.datesSection}>
+            <Text style={styles.datesSectionTitle}>開催日</Text>
+            {FESTIVAL_DATES.map((date) => {
+              /** この日付が選択されているか */
+              const isSelected = selectedDates.some(d => d.date === date);
+              /** 選択されている場合の日付データ */
+              const dateData = selectedDates.find(d => d.date === date);
+              return (
+                <View key={date} style={styles.dateRow}>
+                  <Checkbox
+                    label={formatDateWithDay(date)}
+                    checked={isSelected}
+                    onToggle={(checked) => handleDateToggle(date, checked)}
+                  />
+                  {isSelected && (
+                    <View style={styles.timeInputRow}>
+                      <TextInput
+                        label="開始"
+                        value={dateData.startTime}
+                        onChangeText={(val) => handleStartTimeChange(date, toHalfWidth(val))}
+                        placeholder="10:00"
+                        style={styles.timeInput}
+                      />
+                      <Text style={styles.timeSeparator}>〜</Text>
+                      <TextInput
+                        label="終了"
+                        value={dateData.endTime}
+                        onChangeText={(val) => handleEndTimeChange(date, toHalfWidth(val))}
+                        placeholder="19:00"
+                        style={styles.timeInput}
+                      />
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+          </View>
           {errors.dates && <Text style={styles.errorText}>{errors.dates}</Text>}
 
           <View style={styles.buttonContainer}>
@@ -310,7 +378,9 @@ const EventCreateScreen = () => {
                 <View style={styles.infoRow}>
                   <Text style={styles.infoLabel}>開催日</Text>
                   <Text style={styles.infoValue}>
-                    {registeredData.dates.map(d => formatDateWithDay(d)).join(', ')}
+                    {registeredData.dates.map(d =>
+                      `${formatDateWithDay(d.date)} ${d.startTime}〜${d.endTime}`
+                    ).join('\n')}
                   </Text>
                 </View>
               </View>
@@ -350,6 +420,33 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: SPACING.MD,
+  },
+  datesSection: {
+    marginBottom: SPACING.MD,
+  },
+  datesSectionTitle: {
+    fontSize: FONT_SIZES.LG,
+    fontWeight: '600',
+    color: COLORS.TEXT,
+    marginBottom: SPACING.SM,
+  },
+  dateRow: {
+    marginBottom: SPACING.SM,
+  },
+  timeInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: SPACING.XS,
+    marginLeft: SPACING.LG + SPACING.SM,
+  },
+  timeInput: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  timeSeparator: {
+    fontSize: FONT_SIZES.LG,
+    color: COLORS.TEXT,
+    marginHorizontal: SPACING.SM,
   },
   errorText: {
     fontSize: FONT_SIZES.SM,

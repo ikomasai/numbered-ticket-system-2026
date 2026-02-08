@@ -1,12 +1,15 @@
 /**
  * アプリケーションナビゲーター
- * アプリ全体のナビゲーション構造を定義（左サイドメニュー）
+ * アプリ全体のナビゲーション構造を定義
+ * PC: 左サイドバー（Drawer）
+ * スマホ: 画面下タブバー（BottomTab）
  */
 
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createDrawerNavigator, DrawerContentScrollView, DrawerItem } from '@react-navigation/drawer';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Text, StyleSheet } from 'react-native';
 
 // 企画管理画面インポート
@@ -27,11 +30,14 @@ import StatusListScreen from '../features/status/screens/StatusListScreen';
 import StatusDetailScreen from '../features/status/screens/StatusDetailScreen';
 
 import { COLORS, FONT_SIZES, SPACING, APP_NAME } from '../shared/constants';
+import { useResponsive } from '../shared/hooks/useResponsive';
 
 /** ネイティブスタックナビゲーター */
 const Stack = createNativeStackNavigator();
-/** ドロワーナビゲーター */
+/** ドロワーナビゲーター（PC用） */
 const Drawer = createDrawerNavigator();
+/** ボトムタブナビゲーター（スマホ用） */
+const Tab = createBottomTabNavigator();
 
 /**
  * 企画管理スタックナビゲーター
@@ -147,7 +153,71 @@ const StatusStack = () => (
 );
 
 /**
- * カスタムドロワーコンテンツ
+ * タブアイコンコンポーネント
+ * @param {Object} props - プロパティ
+ * @param {string} props.icon - アイコン文字
+ * @param {boolean} props.focused - フォーカス状態
+ * @returns {JSX.Element} タブアイコン
+ */
+const TabIcon = ({ icon, focused }) => (
+  <View style={[styles.tabIcon, focused && styles.tabIconActive]}>
+    <Text style={[styles.tabIconText, focused && styles.tabIconTextActive]}>
+      {icon}
+    </Text>
+  </View>
+);
+
+/**
+ * スマホ用ボトムタブナビゲーター
+ * @returns {JSX.Element} ボトムタブナビゲーター
+ */
+const MobileTabNavigator = () => (
+  <Tab.Navigator
+    screenOptions={{
+      headerShown: false,
+      tabBarStyle: styles.tabBar,
+      tabBarActiveTintColor: COLORS.PRIMARY,
+      tabBarInactiveTintColor: COLORS.TEXT_SECONDARY,
+      tabBarLabelStyle: styles.tabBarLabel,
+    }}
+  >
+    <Tab.Screen
+      name="EventTab"
+      component={EventStack}
+      options={{
+        tabBarLabel: '企画管理',
+        tabBarIcon: ({ focused }) => <TabIcon icon="企" focused={focused} />,
+      }}
+    />
+    <Tab.Screen
+      name="TicketTab"
+      component={TicketStack}
+      options={{
+        tabBarLabel: '発券',
+        tabBarIcon: ({ focused }) => <TabIcon icon="券" focused={focused} />,
+      }}
+    />
+    <Tab.Screen
+      name="CallTab"
+      component={CallStack}
+      options={{
+        tabBarLabel: '呼び出し',
+        tabBarIcon: ({ focused }) => <TabIcon icon="呼" focused={focused} />,
+      }}
+    />
+    <Tab.Screen
+      name="StatusTab"
+      component={StatusStack}
+      options={{
+        tabBarLabel: '状況確認',
+        tabBarIcon: ({ focused }) => <TabIcon icon="状" focused={focused} />,
+      }}
+    />
+  </Tab.Navigator>
+);
+
+/**
+ * カスタムドロワーコンテンツ（PC用）
  * @param {Object} props - ナビゲーションプロパティ
  * @returns {JSX.Element} ドロワーコンテンツ
  */
@@ -163,6 +233,21 @@ const CustomDrawerContent = (props) => {
     { name: 'CallTab', label: '呼び出し', icon: '呼', firstScreen: 'CallList' },
     { name: 'StatusTab', label: '状況確認', icon: '状', firstScreen: 'StatusList' },
   ];
+
+  /**
+   * メニュー項目をタップした時の処理
+   * @param {Object} item - メニュー項目
+   * @param {boolean} isActive - 現在選択中かどうか
+   */
+  const handleMenuPress = (item, isActive) => {
+    if (isActive) {
+      // 同じタブを押した場合、スタックの最初の画面に戻る
+      navigation.navigate(item.name, { screen: item.firstScreen });
+    } else {
+      // 異なるタブの場合、通常のナビゲーション
+      navigation.navigate(item.name);
+    }
+  };
 
   return (
     <DrawerContentScrollView {...props} style={styles.drawerContent}>
@@ -190,15 +275,7 @@ const CustomDrawerContent = (props) => {
                   </Text>
                 </View>
               )}
-              onPress={() => {
-                if (isActive) {
-                  // 同じタブを押した場合、スタックの最初の画面に戻る
-                  navigation.navigate(item.name, { screen: item.firstScreen });
-                } else {
-                  // 異なるタブの場合、通常のナビゲーション
-                  navigation.navigate(item.name);
-                }
-              }}
+              onPress={() => handleMenuPress(item, isActive)}
               style={[styles.menuItem, isActive && styles.menuItemActive]}
             />
           );
@@ -209,11 +286,10 @@ const CustomDrawerContent = (props) => {
 };
 
 /**
- * メインドロワーナビゲーター
- * 4つのメニュー（企画管理・発券・呼び出し・状況確認）を管理
+ * PC用ドロワーナビゲーター
  * @returns {JSX.Element} ドロワーナビゲーター
  */
-const MainDrawer = () => (
+const DesktopDrawerNavigator = () => (
   <Drawer.Navigator
     drawerContent={(props) => <CustomDrawerContent {...props} />}
     screenOptions={{
@@ -232,17 +308,22 @@ const MainDrawer = () => (
 
 /**
  * アプリケーションナビゲーター
+ * PC: Drawer（左サイドバー）
+ * スマホ: BottomTab（画面下タブ）
  * @returns {JSX.Element} ナビゲーターコンポーネント
  */
 const AppNavigator = () => {
+  const { isMobile } = useResponsive();
+
   return (
     <NavigationContainer>
-      <MainDrawer />
+      {isMobile ? <MobileTabNavigator /> : <DesktopDrawerNavigator />}
     </NavigationContainer>
   );
 };
 
 const styles = StyleSheet.create({
+  /** PC用ドロワー */
   drawer: {
     width: 280,
     backgroundColor: COLORS.CARD_BACKGROUND,
@@ -305,6 +386,39 @@ const styles = StyleSheet.create({
   menuLabelActive: {
     color: COLORS.PRIMARY,
     fontWeight: '600',
+  },
+  /** スマホ用ボトムタブ */
+  tabBar: {
+    backgroundColor: COLORS.CARD_BACKGROUND,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.BORDER,
+    height: 80,
+    paddingBottom: 16,
+    paddingTop: 8,
+  },
+  tabBarLabel: {
+    fontSize: FONT_SIZES.XS,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  tabIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: COLORS.BACKGROUND,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabIconActive: {
+    backgroundColor: COLORS.PRIMARY,
+  },
+  tabIconText: {
+    fontSize: FONT_SIZES.SM,
+    fontWeight: 'bold',
+    color: COLORS.TEXT_SECONDARY,
+  },
+  tabIconTextActive: {
+    color: COLORS.CARD_BACKGROUND,
   },
 });
 

@@ -14,12 +14,10 @@ import {
   Platform,
   SafeAreaView,
   ActivityIndicator,
-  Modal,
-  TouchableOpacity,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useEvent, useEvents } from '../hooks/useEvents';
-import { Button, TextInput, Select } from '../../../shared/components';
+import { Button, TextInput, Select, DateTabBar } from '../../../shared/components';
 import {
   COLORS,
   FONT_SIZES,
@@ -29,14 +27,33 @@ import {
   STATUS,
   STATUS_LABELS,
   STATUS_COLORS,
+  SLOT_THRESHOLDS,
+  SLOT_STATUS_COLORS,
 } from '../../../shared/constants';
 import { formatDateWithDay, formatTimeSlotDisplay } from '../../../shared/utils/dateTime';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
+
+/**
+ * 定員に対する現在の人数から色を取得
+ * @param {number} currentCount - 現在の人数
+ * @param {number} capacity - 定員
+ * @returns {string} 表示色
+ */
+const getSlotStatusColor = (currentCount, capacity) => {
+  const rate = (currentCount / capacity) * 100;
+  if (rate <= SLOT_THRESHOLDS.LOW) return SLOT_STATUS_COLORS.VERY_LOW;
+  if (rate <= SLOT_THRESHOLDS.MEDIUM) return SLOT_STATUS_COLORS.LOW;
+  if (rate <= SLOT_THRESHOLDS.HIGH) return SLOT_STATUS_COLORS.MEDIUM;
+  if (rate <= SLOT_THRESHOLDS.VERY_HIGH) return SLOT_STATUS_COLORS.HIGH;
+  return SLOT_STATUS_COLORS.VERY_HIGH;
+};
 
 /**
  * 企画編集画面コンポーネント
  * @returns {JSX.Element} 企画編集画面
  */
 const EventEditScreen = () => {
+  const { isMobile } = useResponsive();
   const navigation = useNavigation();
   const route = useRoute();
   const { eventId } = route.params;
@@ -56,6 +73,8 @@ const EventEditScreen = () => {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   /** バリデーションエラー */
   const [errors, setErrors] = useState({});
+  /** 選択中の開催日ID */
+  const [selectedDateId, setSelectedDateId] = useState(null);
 
   /** ステータス選択肢 */
   const statusOptions = Object.entries(STATUS_LABELS).map(([value, label]) => ({
@@ -70,6 +89,10 @@ const EventEditScreen = () => {
       setLocation(event.location);
       if (event.estimated_wait_minutes) {
         setEstimatedWaitMinutes(String(event.estimated_wait_minutes));
+      }
+      // 初回のみ最初の開催日を選択
+      if (!selectedDateId && event.event_dates?.length > 0) {
+        setSelectedDateId(event.event_dates[0].id);
       }
     }
   }, [event]);
@@ -239,11 +262,20 @@ const EventEditScreen = () => {
           <Text style={styles.subtitle}>{EVENT_TYPE_LABELS[event.type]}</Text>
         </View>
 
+        {/* 日付タブ */}
+        {event.event_dates?.length > 0 && (
+          <DateTabBar
+            dates={event.event_dates}
+            selectedDateId={selectedDateId}
+            onSelectDate={(dateItem) => setSelectedDateId(dateItem.id)}
+          />
+        )}
+
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
           {/* 上部：企画情報と開催日ステータスを横並び */}
-          <View style={styles.topRow}>
+          <View style={[styles.topRow, isMobile && styles.topRowMobile]}>
             {/* 左側：企画情報入力 */}
-            <View style={styles.leftColumn}>
+            <View style={[styles.leftColumn, isMobile && styles.columnMobile]}>
               <TextInput
                 label="企画名"
                 value={name}
@@ -272,14 +304,16 @@ const EventEditScreen = () => {
               )}
             </View>
 
-            {/* 右側：開催日ステータス */}
-            <View style={styles.rightColumn}>
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>開催日ステータス</Text>
-                {event.event_dates?.map((dateItem) => (
-                  <View key={dateItem.id} style={styles.dateStatusItem}>
-                    <View style={styles.dateLabelContainer}>
-                      <Text style={styles.dateLabel}>{formatDateWithDay(dateItem.date)}</Text>
+            {/* 右側：選択中の開催日ステータス */}
+            <View style={[styles.rightColumn, isMobile && styles.columnMobile]}>
+              {event.event_dates?.filter(d => d.id === selectedDateId).map((dateItem) => (
+                <View key={dateItem.id} style={styles.section}>
+                  <Text style={styles.sectionTitle}>
+                    {formatDateWithDay(dateItem.date)} のステータス
+                  </Text>
+                  <View style={[styles.dateStatusItem, isMobile && styles.dateStatusItemMobile]}>
+                    <View style={[styles.dateLabelContainer, isMobile && styles.dateLabelContainerMobile]}>
+                      <Text style={styles.dateLabel}>現在のステータス</Text>
                       <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[dateItem.status] }]}>
                         <Text style={styles.statusBadgeText}>{STATUS_LABELS[dateItem.status]}</Text>
                       </View>
@@ -288,87 +322,98 @@ const EventEditScreen = () => {
                       value={dateItem.status}
                       onValueChange={(newStatus) => handleDateStatusChange(dateItem.id, newStatus)}
                       options={statusOptions}
-                      style={styles.dateStatusSelect}
+                      style={[styles.dateStatusSelect, isMobile && styles.dateStatusSelectMobile]}
                     />
                   </View>
-                ))}
-              </View>
+                </View>
+              ))}
             </View>
           </View>
 
-          {/* 時間枠定員制の場合は時間枠ごとのステータス管理 */}
-          {event.type === EVENT_TYPES.TIME_SLOT && event.event_dates?.map((dateItem) => (
-            <View key={`slots-${dateItem.id}`} style={styles.timeSlotsSection}>
-              <View style={styles.sectionTitleContainer}>
-                <Text style={styles.sectionTitle}>
-                  {formatDateWithDay(dateItem.date)} - 時間枠ステータス
-                </Text>
-                <View style={[styles.statusBadgeSmall, { backgroundColor: STATUS_COLORS[dateItem.status] }]}>
-                  <Text style={styles.statusBadgeTextSmall}>{STATUS_LABELS[dateItem.status]}</Text>
-                </View>
-              </View>
-              <View style={styles.timeSlotsGrid}>
-                {/* 左列 */}
-                <View style={styles.timeSlotsColumn}>
-                  {dateItem.time_slots?.slice(0, Math.ceil(dateItem.time_slots.length / 2)).map((slot) => (
-                    <View key={slot.id} style={styles.slotCard}>
-                      <View style={styles.slotLeft}>
-                        <View style={styles.slotHeader}>
-                          <Text style={styles.slotTime}>
-                            {formatTimeSlotDisplay(slot.start_time, slot.end_time)}
-                          </Text>
-                          <View style={[styles.slotStatusBadge, { backgroundColor: STATUS_COLORS[slot.status] }]}>
-                            <Text style={styles.slotStatusBadgeText}>{STATUS_LABELS[slot.status]}</Text>
+          {/* 時間枠定員制の場合は選択中の日付の時間枠ステータス管理 */}
+          {event.type === EVENT_TYPES.TIME_SLOT && event.event_dates
+            ?.filter(d => d.id === selectedDateId)
+            .map((dateItem) => (
+              <View key={`slots-${dateItem.id}`} style={styles.timeSlotsSection}>
+                <Text style={styles.sectionTitle}>時間枠ステータス</Text>
+                <View style={[styles.timeSlotsGrid, isMobile && styles.timeSlotsGridMobile]}>
+                  {/* 左列 */}
+                  <View style={[styles.timeSlotsColumn, isMobile && styles.timeSlotsColumnMobile]}>
+                    {dateItem.time_slots?.slice(0, Math.ceil(dateItem.time_slots.length / 2)).map((slot) => {
+                      const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot);
+                      return (
+                        <View key={slot.id} style={[styles.slotCard, isMobile && styles.slotCardMobile]}>
+                          <View style={[styles.slotLeft, isMobile && styles.slotLeftMobile]}>
+                            <View style={styles.slotHeader}>
+                              <Text style={styles.slotTime}>
+                                {formatTimeSlotDisplay(slot.start_time, slot.end_time)}
+                              </Text>
+                              <View style={[styles.slotStatusBadge, { backgroundColor: STATUS_COLORS[slot.status] }]}>
+                                <Text style={styles.slotStatusBadgeText}>{STATUS_LABELS[slot.status]}</Text>
+                              </View>
+                            </View>
+                            <View style={styles.slotCountRow}>
+                              <Text style={[styles.slotCountCurrent, { color: statusColor }]}>
+                                {slot.current_count}
+                              </Text>
+                              <Text style={styles.slotCount}>
+                                /{event.capacity_per_slot}名
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={[styles.slotRight, isMobile && styles.slotRightMobile]}>
+                            <Select
+                              label={isMobile ? '' : 'ステータス変更'}
+                              value={slot.status}
+                              onValueChange={(newStatus) => handleTimeSlotStatusChange(slot.id, newStatus)}
+                              options={statusOptions}
+                              style={styles.statusSelect}
+                            />
                           </View>
                         </View>
-                        <Text style={styles.slotCount}>
-                          {slot.current_count}/{event.capacity_per_slot}名
-                        </Text>
-                      </View>
-                      <View style={styles.slotRight}>
-                        <Select
-                          label="ステータス変更"
-                          value={slot.status}
-                          onValueChange={(newStatus) => handleTimeSlotStatusChange(slot.id, newStatus)}
-                          options={statusOptions}
-                          style={styles.statusSelect}
-                        />
-                      </View>
-                    </View>
-                  ))}
-                </View>
-                {/* 右列 */}
-                <View style={styles.timeSlotsColumn}>
-                  {dateItem.time_slots?.slice(Math.ceil(dateItem.time_slots.length / 2)).map((slot) => (
-                    <View key={slot.id} style={styles.slotCard}>
-                      <View style={styles.slotLeft}>
-                        <View style={styles.slotHeader}>
-                          <Text style={styles.slotTime}>
-                            {formatTimeSlotDisplay(slot.start_time, slot.end_time)}
-                          </Text>
-                          <View style={[styles.slotStatusBadge, { backgroundColor: STATUS_COLORS[slot.status] }]}>
-                            <Text style={styles.slotStatusBadgeText}>{STATUS_LABELS[slot.status]}</Text>
+                      );
+                    })}
+                  </View>
+                  {/* 右列 */}
+                  <View style={[styles.timeSlotsColumn, isMobile && styles.timeSlotsColumnMobile]}>
+                    {dateItem.time_slots?.slice(Math.ceil(dateItem.time_slots.length / 2)).map((slot) => {
+                      const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot);
+                      return (
+                        <View key={slot.id} style={[styles.slotCard, isMobile && styles.slotCardMobile]}>
+                          <View style={[styles.slotLeft, isMobile && styles.slotLeftMobile]}>
+                            <View style={styles.slotHeader}>
+                              <Text style={styles.slotTime}>
+                                {formatTimeSlotDisplay(slot.start_time, slot.end_time)}
+                              </Text>
+                              <View style={[styles.slotStatusBadge, { backgroundColor: STATUS_COLORS[slot.status] }]}>
+                                <Text style={styles.slotStatusBadgeText}>{STATUS_LABELS[slot.status]}</Text>
+                              </View>
+                            </View>
+                            <View style={styles.slotCountRow}>
+                              <Text style={[styles.slotCountCurrent, { color: statusColor }]}>
+                                {slot.current_count}
+                              </Text>
+                              <Text style={styles.slotCount}>
+                                /{event.capacity_per_slot}名
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={[styles.slotRight, isMobile && styles.slotRightMobile]}>
+                            <Select
+                              label={isMobile ? '' : 'ステータス変更'}
+                              value={slot.status}
+                              onValueChange={(newStatus) => handleTimeSlotStatusChange(slot.id, newStatus)}
+                              options={statusOptions}
+                              style={styles.statusSelect}
+                            />
                           </View>
                         </View>
-                        <Text style={styles.slotCount}>
-                          {slot.current_count}/{event.capacity_per_slot}名
-                        </Text>
-                      </View>
-                      <View style={styles.slotRight}>
-                        <Select
-                          label="ステータス変更"
-                          value={slot.status}
-                          onValueChange={(newStatus) => handleTimeSlotStatusChange(slot.id, newStatus)}
-                          options={statusOptions}
-                          style={styles.statusSelect}
-                        />
-                      </View>
-                    </View>
-                  ))}
+                      );
+                    })}
+                  </View>
                 </View>
               </View>
-            </View>
-          ))}
+            ))}
 
           <View style={styles.buttonContainer}>
             <Button
@@ -430,17 +475,33 @@ const styles = StyleSheet.create({
   content: {
     padding: SPACING.MD,
   },
+  /** PC用: 上部横並び */
   topRow: {
     flexDirection: 'row',
     gap: SPACING.LG,
     marginBottom: SPACING.MD,
   },
+  /** スマホ用: 上部縦並び */
+  topRowMobile: {
+    flexDirection: 'column',
+    gap: SPACING.MD,
+  },
+  /** PC用: 左カラム */
   leftColumn: {
     flex: 1,
     justifyContent: 'center',
   },
+  /** PC用: 右カラム */
   rightColumn: {
     flex: 1,
+  },
+  /** スマホ用: カラム（幅100%） */
+  columnMobile: {
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: 'auto',
+    width: '100%',
+    marginBottom: SPACING.MD,
   },
   section: {
     marginTop: 0,
@@ -462,12 +523,6 @@ const styles = StyleSheet.create({
     color: COLORS.TEXT,
     marginBottom: SPACING.MD,
   },
-  sectionTitleContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.MD,
-  },
   dateStatusItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -477,12 +532,28 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.BORDER,
   },
+  /** スマホ用: 開催日ステータス（縦並び） */
+  dateStatusItemMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: SPACING.SM,
+  },
   dateLabelContainer: {
     flexShrink: 0,
+  },
+  /** スマホ用: 日付ラベルコンテナ */
+  dateLabelContainerMobile: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   dateStatusSelect: {
     width: 160,
     marginBottom: 0,
+  },
+  /** スマホ用: 開催日ステータスセレクト（幅100%） */
+  dateStatusSelectMobile: {
+    width: '100%',
   },
   dateLabel: {
     fontSize: FONT_SIZES.LG,
@@ -501,25 +572,31 @@ const styles = StyleSheet.create({
     color: COLORS.CARD_BACKGROUND,
     fontWeight: '600',
   },
-  statusBadgeSmall: {
-    paddingHorizontal: SPACING.SM,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  statusBadgeTextSmall: {
-    fontSize: FONT_SIZES.XS,
-    color: COLORS.CARD_BACKGROUND,
-    fontWeight: '600',
-  },
+  /** PC用: 時間枠グリッド（2列） */
   timeSlotsGrid: {
     flexDirection: 'row',
     gap: 28,
     width: '95%',
     alignSelf: 'center',
   },
+  /** スマホ用: 時間枠グリッド（1列） */
+  timeSlotsGridMobile: {
+    flexDirection: 'column',
+    gap: 0,
+    width: '100%',
+  },
+  /** PC用: 時間枠カラム */
   timeSlotsColumn: {
     flex: 1,
   },
+  /** スマホ用: 時間枠カラム（幅100%） */
+  timeSlotsColumnMobile: {
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: 'auto',
+    width: '100%',
+  },
+  /** PC用: スロットカード（横並び） */
   slotCard: {
     backgroundColor: COLORS.BACKGROUND,
     borderRadius: 8,
@@ -530,12 +607,28 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: SPACING.MD,
   },
+  /** スマホ用: スロットカード（縦並び） */
+  slotCardMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: SPACING.SM,
+  },
+  /** PC用: スロット左側 */
   slotLeft: {
     flexShrink: 0,
   },
+  /** スマホ用: スロット左側（幅100%） */
+  slotLeftMobile: {
+    width: '100%',
+  },
+  /** PC用: スロット右側 */
   slotRight: {
     width: 180,
     flexShrink: 0,
+  },
+  /** スマホ用: スロット右側（幅100%） */
+  slotRightMobile: {
+    width: '100%',
   },
   slotHeader: {
     flexDirection: 'row',
@@ -547,6 +640,14 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.XL,
     fontWeight: '600',
     color: COLORS.TEXT,
+  },
+  slotCountRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  slotCountCurrent: {
+    fontSize: FONT_SIZES.XL,
+    fontWeight: 'bold',
   },
   slotCount: {
     fontSize: FONT_SIZES.LG,

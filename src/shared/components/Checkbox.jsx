@@ -78,7 +78,7 @@ export const CheckboxGroup = ({
 
   return (
     <View style={[styles.groupContainer, style]}>
-      {label && <Text style={styles.groupLabel}>{label}</Text>}
+      {label ? <Text style={styles.groupLabel}>{label}</Text> : null}
       <View style={styles.optionsContainer}>
         {options.map((option) => (
           <Checkbox

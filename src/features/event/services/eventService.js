@@ -102,7 +102,7 @@ export const selectEventById = async (id) => {
  * @param {number} eventData.capacityPerSlot - 1枠あたりの定員（時間枠定員制のみ）
  * @param {number} eventData.slotDurationMinutes - 1枠あたりの時間（時間枠定員制のみ）
  * @param {number} eventData.estimatedWaitMinutes - 推定待ち時間（順次案内制のみ）
- * @param {Array<string>} eventData.dates - 開催日の配列
+ * @param {Array<{date: string, startTime: string, endTime: string}>} eventData.dates - 開催日の配列（日付・開始時刻・終了時刻）
  * @returns {Promise<{data: Object|null, error: Error|null}>} 登録された企画データ
  */
 export const insertEvent = async (eventData) => {
@@ -125,10 +125,12 @@ export const insertEvent = async (eventData) => {
 
     if (eventError) throw eventError;
 
-    // 開催日を登録
-    const eventDatesData = dates.map(date => ({
+    // 開催日を登録（日付ごとの開始・終了時刻を含む）
+    const eventDatesData = dates.map(dateItem => ({
       event_id: event.id,
-      date,
+      date: dateItem.date,
+      start_time: dateItem.startTime,
+      end_time: dateItem.endTime,
       status: STATUS.NOT_STARTED,
     }));
 
@@ -139,13 +141,21 @@ export const insertEvent = async (eventData) => {
 
     if (datesError) throw datesError;
 
-    // 時間枠定員制の場合は時間枠を生成
+    // 時間枠定員制の場合は日付ごとの開始・終了時刻で時間枠を生成
     if (type === EVENT_TYPES.TIME_SLOT) {
-      const timeSlots = generateTimeSlots(slotDurationMinutes);
       const timeSlotsData = [];
 
       for (const eventDate of eventDates) {
-        // 各開催日の時間枠に対して開始番号を計算
+        // 該当日の開始・終了時刻を取得（event_datesから返却されたデータを使用）
+        const dateItem = dates.find(d => d.date === eventDate.date);
+        /** 日付ごとの時間枠 */
+        const timeSlots = generateTimeSlots(
+          slotDurationMinutes,
+          dateItem?.startTime,
+          dateItem?.endTime,
+        );
+
+        // 各時間枠に対して開始番号を計算
         for (let slotIndex = 0; slotIndex < timeSlots.length; slotIndex++) {
           const slot = timeSlots[slotIndex];
           // 開始番号 = 定員 × インデックス + 1

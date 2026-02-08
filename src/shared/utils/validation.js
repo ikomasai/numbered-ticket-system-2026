@@ -59,3 +59,16 @@ export const validateUrl = (url) => {
     return false;
   }
 };
+
+/**
+ * 全角数字・記号を半角に変換
+ * ０-９ → 0-9、： → : に変換する
+ * @param {string} value - 変換対象の文字列
+ * @returns {string} 半角に変換された文字列
+ */
+export const toHalfWidth = (value) => {
+  if (!value) return value;
+  return value
+    .replace(/[０-９]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xFEE0))
+    .replace(/：/g, ':');
+};
