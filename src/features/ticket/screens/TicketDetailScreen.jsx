@@ -461,7 +461,7 @@ const TicketDetailScreen = ({ route, navigation }) => {
                 <Text style={styles.qrLabel}>このQRコードを読み取ってください</Text>
                 <View style={styles.qrCode}>
                   <QRCodeSVG
-                    value={`${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/digital_tickets/${issuedTicket.qr_token}`}
+                    value={`${process.env.EXPO_PUBLIC_TICKET_PAGE_URL}/?token=${issuedTicket.qr_token}`}
                     size={200}
                   />
                 </View>
