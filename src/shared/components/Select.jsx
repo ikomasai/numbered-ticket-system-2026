@@ -3,7 +3,7 @@
  * モーダル形式の選択入力
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   StyleSheet,
   Modal,
   Pressable,
+  Platform,
 } from 'react-native';
 import { COLORS, FONT_SIZES, SPACING } from '../constants';
 
@@ -24,6 +25,7 @@ import { COLORS, FONT_SIZES, SPACING } from '../constants';
  * @param {Array<{label: string, value: string}>} props.options - 選択肢の配列
  * @param {string} props.placeholder - プレースホルダー
  * @param {boolean} props.disabled - 無効状態
+ * @param {string} props.disabledReason - 無効時のツールチップ（Web用）
  * @param {Object} props.style - 追加スタイル
  * @returns {JSX.Element} 選択コンポーネント
  */
@@ -34,10 +36,24 @@ const Select = ({
   options,
   placeholder = '選択してください',
   disabled = false,
+  disabledReason,
   style,
 }) => {
   /** モーダル表示状態 */
   const [isModalVisible, setIsModalVisible] = useState(false);
+  /** セレクターボタンのref（Web用ツールチップ設定） */
+  const selectorRef = useRef(null);
+
+  // Web用: 無効時にツールチップ（title属性）を設定
+  useEffect(() => {
+    if (Platform.OS === 'web' && selectorRef.current) {
+      if (disabled && disabledReason) {
+        selectorRef.current.setAttribute('title', disabledReason);
+      } else {
+        selectorRef.current.removeAttribute('title');
+      }
+    }
+  }, [disabled, disabledReason]);
 
   /**
    * 選択されたオプションのラベルを取得
@@ -80,6 +96,7 @@ const Select = ({
 
         {/* セレクターボタン */}
         <TouchableOpacity
+          ref={selectorRef}
           style={[styles.selector, disabled && styles.selectorDisabled]}
           onPress={handleOpen}
           activeOpacity={disabled ? 1 : 0.7}

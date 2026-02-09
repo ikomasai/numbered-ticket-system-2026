@@ -112,40 +112,22 @@ export const issueTicket = async ({ eventId, eventDateId, timeSlotId, mediumType
 
     // 6. 時間枠定員制の場合は時間枠の発券数を更新
     if (timeSlotId) {
-      const { data: updatedSlot, error: updateSlotError } = await supabase
+      // 現在のカウントを取得
+      const { data: currentSlot } = await supabase
         .from('time_slots')
-        .update({ current_count: supabase.rpc ? undefined : undefined })
-        .eq('id', timeSlotId)
         .select('current_count')
+        .eq('id', timeSlotId)
         .single();
 
-      // current_countをインクリメント
-      const { error: incrementError } = await supabase.rpc('increment_time_slot_count', {
-        slot_id: timeSlotId,
-      });
-
-      // RPCがない場合は直接更新
-      if (incrementError) {
-        const { data: currentSlot } = await supabase
-          .from('time_slots')
-          .select('current_count')
-          .eq('id', timeSlotId)
-          .single();
-
-        await supabase
-          .from('time_slots')
-          .update({ current_count: (currentSlot?.current_count || 0) + 1 })
-          .eq('id', timeSlotId);
-      }
+      // カウントを更新（+1）
+      const newCount = (currentSlot?.current_count || 0) + 1;
+      await supabase
+        .from('time_slots')
+        .update({ current_count: newCount })
+        .eq('id', timeSlotId);
 
       // 満員チェック - 定員に達したらステータスを更新
-      const { data: finalSlot } = await supabase
-        .from('time_slots')
-        .select('current_count')
-        .eq('id', timeSlotId)
-        .single();
-
-      if (capacity && finalSlot && finalSlot.current_count >= capacity) {
+      if (capacity && newCount >= capacity) {
         await supabase
           .from('time_slots')
           .update({ status: STATUS.FULL })
@@ -171,6 +153,144 @@ export const issueTicket = async ({ eventId, eventDateId, timeSlotId, mediumType
     return { data: { ...ticket, ticket_number: ticketNumber }, error: null };
   } catch (error) {
     console.error('発券エラー:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * 整理券を複数枚一括発行（バッチ処理）
+ * @param {Object} params - 発券パラメータ
+ * @param {string} params.eventId - 企画ID
+ * @param {string} params.eventDateId - 企画開催日ID
+ * @param {string} params.timeSlotId - 時間枠ID（時間枠定員制のみ）
+ * @param {string} params.mediumType - 媒体タイプ（paper/digital）
+ * @param {number} params.capacity - 定員（時間枠定員制のみ）
+ * @param {number} params.quantity - 発券枚数
+ * @returns {Promise<{data: Array|null, error: Error|null}>} 発行された整理券データの配列
+ */
+export const issueMultipleTickets = async ({ eventId, eventDateId, timeSlotId, mediumType, capacity, quantity }) => {
+  try {
+    // 1. 企画開催日のステータスを確認
+    const { data: eventDate, error: fetchError } = await supabase
+      .from('event_dates')
+      .select('next_ticket_number, status')
+      .eq('id', eventDateId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    if (eventDate.status !== STATUS.ACTIVE) {
+      throw new Error('この日の発券は受付中ではありません');
+    }
+
+    /** 開始整理番号 */
+    let startTicketNumber;
+
+    // 2. 時間枠定員制の場合
+    if (timeSlotId) {
+      const { data: timeSlot, error: slotError } = await supabase
+        .from('time_slots')
+        .select('current_count, status, start_ticket_number')
+        .eq('id', timeSlotId)
+        .single();
+
+      if (slotError) throw slotError;
+
+      if (timeSlot.status !== STATUS.ACTIVE) {
+        throw new Error('この時間枠の発券は受付中ではありません');
+      }
+
+      /** 残り枠数 */
+      const remaining = capacity - timeSlot.current_count;
+      if (remaining < quantity) {
+        throw new Error(`残り${remaining}枚しか発券できません`);
+      }
+
+      startTicketNumber = timeSlot.start_ticket_number + timeSlot.current_count;
+    } else {
+      // 順次案内制の場合
+      startTicketNumber = eventDate.next_ticket_number;
+    }
+
+    // 3. 整理券データを一括作成（デジタルの場合、全チケットで共通のQRトークンを使用）
+    /** 共通QRコード用トークン（1グループ1つ） */
+    const sharedQrToken = mediumType === MEDIUM_TYPES.DIGITAL ? generateUUID() : null;
+    /** 一括挿入用のチケットデータ配列 */
+    const ticketsToInsert = [];
+    for (let i = 0; i < quantity; i++) {
+      ticketsToInsert.push({
+        event_id: eventId,
+        event_date_id: eventDateId,
+        time_slot_id: timeSlotId || null,
+        ticket_number: startTicketNumber + i,
+        medium_type: mediumType,
+        qr_token: sharedQrToken,
+      });
+    }
+
+    // 4. 一括挿入
+    const { data: tickets, error: insertError } = await supabase
+      .from('tickets')
+      .insert(ticketsToInsert)
+      .select();
+
+    if (insertError) throw insertError;
+
+    // 5. 順次案内制の場合は次の整理番号を更新
+    if (!timeSlotId) {
+      const { error: updateDateError } = await supabase
+        .from('event_dates')
+        .update({ next_ticket_number: startTicketNumber + quantity })
+        .eq('id', eventDateId)
+        .eq('next_ticket_number', startTicketNumber); // 楽観的ロック
+
+      if (updateDateError) throw updateDateError;
+    }
+
+    // 6. 時間枠定員制の場合は発券数を更新
+    if (timeSlotId) {
+      // 現在のカウントを取得
+      const { data: currentSlot } = await supabase
+        .from('time_slots')
+        .select('current_count')
+        .eq('id', timeSlotId)
+        .single();
+
+      // カウントを更新
+      const newCount = (currentSlot?.current_count || 0) + quantity;
+      await supabase
+        .from('time_slots')
+        .update({ current_count: newCount })
+        .eq('id', timeSlotId);
+
+      // 満員チェック
+      if (capacity && newCount >= capacity) {
+        await supabase
+          .from('time_slots')
+          .update({ status: STATUS.FULL })
+          .eq('id', timeSlotId);
+      }
+    }
+
+    // 7. 発券ログを記録
+    await supabase
+      .from('ticket_logs')
+      .insert({
+        ticket_id: tickets[0].id,
+        action: 'issued_batch',
+        details: {
+          event_id: eventId,
+          event_date_id: eventDateId,
+          time_slot_id: timeSlotId,
+          ticket_numbers: `${startTicketNumber}~${startTicketNumber + quantity - 1}`,
+          quantity,
+          medium_type: mediumType,
+        },
+      });
+
+    return { data: tickets, error: null };
+  } catch (error) {
+    console.error('一括発券エラー:', error);
     return { data: null, error };
   }
 };
@@ -283,6 +403,55 @@ export const selectActiveTimeSlots = async (eventDateId, capacity) => {
     return { data, error: null };
   } catch (error) {
     console.error('時間枠取得エラー:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * 電子整理券の発券予約を作成（お客さんが取得ボタンを押すまで番号は確定しない）
+ * @param {Object} params - 発券パラメータ
+ * @param {string} params.eventId - 企画ID
+ * @param {string} params.eventDateId - 企画開催日ID
+ * @param {string} params.timeSlotId - 時間枠ID（時間枠定員制のみ）
+ * @param {number} params.quantity - 発券枚数
+ * @param {number} params.capacity - 定員（時間枠定員制のみ）
+ * @returns {Promise<{data: Object|null, error: Error|null}>} 予約データ（qr_tokenを含む）
+ */
+export const createTicketReservation = async ({ eventId, eventDateId, timeSlotId, quantity, capacity }) => {
+  try {
+    /** QRコード用トークン */
+    const qrToken = generateUUID();
+
+    // ticket_logsに発券予約を記録
+    const { data: reservation, error: insertError } = await supabase
+      .from('ticket_logs')
+      .insert({
+        ticket_id: null, // まだチケットは存在しない
+        action: 'pending',
+        details: {
+          qr_token: qrToken,
+          event_id: eventId,
+          event_date_id: eventDateId,
+          time_slot_id: timeSlotId || null,
+          quantity,
+          capacity,
+          medium_type: MEDIUM_TYPES.DIGITAL,
+        },
+      })
+      .select()
+      .single();
+
+    if (insertError) throw insertError;
+
+    return {
+      data: {
+        qr_token: qrToken,
+        reservation_id: reservation.id,
+      },
+      error: null,
+    };
+  } catch (error) {
+    console.error('発券予約エラー:', error);
     return { data: null, error };
   }
 };

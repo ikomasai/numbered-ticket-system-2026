@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '../../../services/supabase/client';
-import { issueTicket } from '../services/ticketService';
+import { issueTicket, issueMultipleTickets, createTicketReservation } from '../services/ticketService';
 import { Button, RadioGroup, DateTabBar } from '../../../shared/components';
 import {
   COLORS,
@@ -34,7 +34,7 @@ import {
   SLOT_THRESHOLDS,
   SLOT_STATUS_COLORS,
 } from '../../../shared/constants';
-import { formatDateWithDay, formatTimeSlotDisplay } from '../../../shared/utils/dateTime';
+import { formatDateWithDay, formatTimeSlotDisplay, calculateEstimatedWaitTime, formatWaitTime } from '../../../shared/utils/dateTime';
 import { useResponsive } from '../../../shared/hooks/useResponsive';
 
 /**
@@ -82,13 +82,17 @@ const TicketDetailScreen = ({ route, navigation }) => {
   const [selectedTimeSlot, setSelectedTimeSlot] = useState(null);
   /** 選択中の媒体タイプ */
   const [mediumType, setMediumType] = useState(MEDIUM_TYPES.PAPER);
+  /** 発券枚数 */
+  const [quantity, setQuantity] = useState(1);
+  /** 呼び出し状態（順次案内制用） */
+  const [callStatus, setCallStatus] = useState(null);
 
   /** ローディング状態 */
   const [isLoading, setIsLoading] = useState(false);
   /** 発券処理中状態 */
   const [isIssuing, setIsIssuing] = useState(false);
-  /** 発券結果 */
-  const [issuedTicket, setIssuedTicket] = useState(null);
+  /** 発券結果（複数枚対応） */
+  const [issuedTickets, setIssuedTickets] = useState([]);
   /** 結果モーダル表示状態 */
   const [showResultModal, setShowResultModal] = useState(false);
 
@@ -120,8 +124,41 @@ const TicketDetailScreen = ({ route, navigation }) => {
 
       setEvent(data);
       setEventDates(data.event_dates || []);
+
+      // 選択中の日付を最新データで更新
+      if (selectedDate) {
+        const updatedDate = data.event_dates.find(d => d.id === selectedDate.id);
+        if (updatedDate) {
+          setSelectedDate(updatedDate);
+        }
+      }
     } catch (err) {
       console.error('企画取得エラー:', err);
+    }
+  }, [event.id, selectedDate]);
+
+  /**
+   * 呼び出し状態を取得（順次案内制用）
+   * @param {string} eventDateId - 企画開催日ID
+   */
+  const fetchCallStatus = useCallback(async (eventDateId) => {
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('call_status')
+        .select('current_call_number')
+        .eq('event_id', event.id)
+        .eq('event_date_id', eventDateId)
+        .single();
+
+      if (fetchError) {
+        // 呼び出し状態がない場合は初期値
+        setCallStatus({ current_call_number: 0 });
+      } else {
+        setCallStatus(data);
+      }
+    } catch (err) {
+      console.error('呼び出し状態取得エラー:', err);
+      setCallStatus({ current_call_number: 0 });
     }
   }, [event.id]);
 
@@ -154,9 +191,11 @@ const TicketDetailScreen = ({ route, navigation }) => {
 
       if (event.type === EVENT_TYPES.TIME_SLOT) {
         fetchTimeSlots(firstDate.id);
+      } else if (event.type === EVENT_TYPES.SEQUENTIAL) {
+        fetchCallStatus(firstDate.id);
       }
     }
-  }, [eventDates, selectedDate, event.type, fetchTimeSlots]);
+  }, [eventDates, selectedDate, event.type, fetchTimeSlots, fetchCallStatus]);
 
   // ヘッダータイトルを設定
   useEffect(() => {
@@ -178,6 +217,11 @@ const TicketDetailScreen = ({ route, navigation }) => {
     } else {
       setTimeSlots([]);
     }
+
+    // 順次案内制の場合は呼び出し状態を取得
+    if (event.type === EVENT_TYPES.SEQUENTIAL) {
+      fetchCallStatus(dateItem.id);
+    }
   };
 
   /** 媒体タイプの選択肢 */
@@ -187,7 +231,7 @@ const TicketDetailScreen = ({ route, navigation }) => {
   ];
 
   /**
-   * 発券ボタン押下ハンドラ
+   * 発券ボタン押下ハンドラ（複数枚対応・電子媒体は予約方式）
    */
   const handleIssue = async () => {
     if (!selectedDate) return;
@@ -202,42 +246,81 @@ const TicketDetailScreen = ({ route, navigation }) => {
       return;
     }
 
+    /** バリデーション済み発券枚数 */
+    const qty = Math.max(1, Math.floor(Number(quantity) || 1));
+
     setIsIssuing(true);
 
-    const { data, error: issueError } = await issueTicket({
+    /** 発券パラメータ */
+    const params = {
       eventId: event.id,
       eventDateId: selectedDate.id,
       timeSlotId: selectedTimeSlot?.id || null,
       mediumType,
       capacity: event.capacity_per_slot,
-    });
+    };
+
+    let result;
+
+    // 電子媒体の場合は予約を作成（お客さんが取得ボタンを押すまで番号は確定しない）
+    if (mediumType === MEDIUM_TYPES.DIGITAL) {
+      result = await createTicketReservation({
+        eventId: params.eventId,
+        eventDateId: params.eventDateId,
+        timeSlotId: params.timeSlotId,
+        quantity: qty,
+        capacity: params.capacity,
+      });
+
+      // 予約データを表示用に整形
+      if (result.data) {
+        result.data = [{
+          qr_token: result.data.qr_token,
+          medium_type: MEDIUM_TYPES.DIGITAL,
+          quantity: qty,
+          // 予約であることを示すフラグ
+          is_reservation: true,
+        }];
+      }
+    } else {
+      // 紙媒体の場合は従来通り即座に発券
+      if (qty === 1) {
+        const { data, error } = await issueTicket(params);
+        result = { data: data ? [data] : null, error };
+      } else {
+        result = await issueMultipleTickets({ ...params, quantity: qty });
+      }
+    }
 
     setIsIssuing(false);
 
-    if (issueError) {
+    if (result.error) {
       if (Platform.OS === 'web') {
-        window.alert(issueError.message || '発券に失敗しました');
+        window.alert(result.error.message || '発券に失敗しました');
       } else {
-        Alert.alert('発券エラー', issueError.message || '発券に失敗しました');
+        Alert.alert('発券エラー', result.error.message || '発券に失敗しました');
       }
       return;
     }
 
-    // 発券結果を保存
-    setIssuedTicket({
-      ...data,
+    // 発券/予約結果を保存（共通情報を付与）
+    const ticketsWithInfo = result.data.map((ticket) => ({
+      ...ticket,
       eventName: event.name,
       eventLocation: event.location,
       eventType: event.type,
       eventDate: selectedDate.date,
       timeSlot: selectedTimeSlot,
-    });
+    }));
+    setIssuedTickets(ticketsWithInfo);
     setShowResultModal(true);
 
-    // データを再取得
+    // データを再取得（発券後に表示を即時更新）
     fetchEventData();
     if (event.type === EVENT_TYPES.TIME_SLOT) {
       fetchTimeSlots(selectedDate.id);
+    } else if (event.type === EVENT_TYPES.SEQUENTIAL) {
+      fetchCallStatus(selectedDate.id);
     }
   };
 
@@ -246,7 +329,8 @@ const TicketDetailScreen = ({ route, navigation }) => {
    */
   const handleCloseModal = () => {
     setShowResultModal(false);
-    setIssuedTicket(null);
+    setIssuedTickets([]);
+    setQuantity(1);
   };
 
   /** 選択中の日付のステータスがアクティブかどうか */
@@ -315,8 +399,30 @@ const TicketDetailScreen = ({ route, navigation }) => {
                   value={mediumType}
                   onValueChange={setMediumType}
                 />
+
+                {/* 人数入力 */}
+                <View style={styles.quantitySection}>
+                  <Text style={styles.quantityLabel}>発券枚数</Text>
+                  <View style={styles.quantityControls}>
+                    <TouchableOpacity
+                      style={styles.quantityButton}
+                      onPress={() => setQuantity((prev) => Math.max(1, prev - 1))}
+                      disabled={quantity <= 1}
+                    >
+                      <Text style={[styles.quantityButtonText, quantity <= 1 && styles.quantityButtonTextDisabled]}>-</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.quantityValue}>{quantity}</Text>
+                    <TouchableOpacity
+                      style={styles.quantityButton}
+                      onPress={() => setQuantity((prev) => prev + 1)}
+                    >
+                      <Text style={styles.quantityButtonText}>+</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
                 <Button
-                  title="発券する"
+                  title={quantity > 1 ? `${quantity}枚 発券する` : '発券する'}
                   onPress={handleIssue}
                   isLoading={isIssuing}
                   disabled={isIssueDisabled}
@@ -417,11 +523,38 @@ const TicketDetailScreen = ({ route, navigation }) => {
               </View>
             )}
 
-            {/* 順次案内制の場合 */}
+            {/* 順次案内制の状況表示（状況確認画面と同じ） */}
             {event.type === EVENT_TYPES.SEQUENTIAL && isDateActive && selectedDate && (
-              <View style={styles.nextNumberContainer}>
-                <Text style={styles.nextNumberLabel}>次の整理番号</Text>
-                <Text style={styles.nextNumber}>{selectedDate.next_ticket_number}</Text>
+              <View style={styles.statusSection}>
+                <Text style={styles.sectionTitle}>発券・呼び出し状況</Text>
+                <View style={styles.sequentialCard}>
+                  <View style={styles.sequentialRow}>
+                    <View style={styles.sequentialItem}>
+                      <Text style={styles.sequentialLabel}>最後尾番号</Text>
+                      <Text style={styles.sequentialValue}>
+                        {(selectedDate.next_ticket_number || 1) - 1}
+                      </Text>
+                    </View>
+                    <View style={styles.sequentialItem}>
+                      <Text style={styles.sequentialLabel}>現在の呼び出し番号</Text>
+                      <Text style={styles.sequentialValue}>
+                        {callStatus?.current_call_number || 0}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.waitTimeContainer}>
+                    <Text style={styles.waitTimeLabel}>推定待ち時間</Text>
+                    <Text style={styles.waitTimeValue}>
+                      {formatWaitTime(
+                        calculateEstimatedWaitTime(
+                          selectedDate.next_ticket_number || 1,
+                          callStatus?.current_call_number || 0,
+                          event.estimated_wait_minutes || 5
+                        )
+                      )}
+                    </Text>
+                  </View>
+                </View>
               </View>
             )}
           </View>
@@ -437,35 +570,85 @@ const TicketDetailScreen = ({ route, navigation }) => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>発券完了</Text>
-
-            <View style={styles.ticketInfo}>
-              <Text style={styles.ticketNumber}>No. {issuedTicket?.ticket_number}</Text>
-              <Text style={styles.ticketEvent}>{issuedTicket?.eventName}</Text>
-              <Text style={styles.ticketLocation}>{issuedTicket?.eventLocation}</Text>
-              <Text style={styles.ticketDate}>
-                {issuedTicket?.eventDate && formatDateWithDay(issuedTicket.eventDate)}
-              </Text>
-              {issuedTicket?.timeSlot && (
-                <Text style={styles.ticketTimeSlot}>
-                  {formatTimeSlotDisplay(
-                    issuedTicket.timeSlot.start_time,
-                    issuedTicket.timeSlot.end_time
-                  )}
+            {/* 予約の場合 */}
+            {issuedTickets.length > 0 && issuedTickets[0]?.is_reservation ? (
+              <>
+                <Text style={styles.modalTitle}>
+                  QRコード発行完了{issuedTickets[0]?.quantity > 1 ? `（${issuedTickets[0].quantity}人分）` : ''}
                 </Text>
-              )}
-            </View>
-
-            {issuedTicket?.medium_type === MEDIUM_TYPES.DIGITAL && issuedTicket?.qr_token && (
-              <View style={styles.qrContainer}>
-                <Text style={styles.qrLabel}>このQRコードを読み取ってください</Text>
-                <View style={styles.qrCode}>
-                  <QRCodeSVG
-                    value={`${process.env.EXPO_PUBLIC_TICKET_PAGE_URL}/?token=${issuedTicket.qr_token}`}
-                    size={200}
-                  />
+                <View style={styles.ticketInfo}>
+                  <Text style={styles.ticketEvent}>{issuedTickets[0]?.eventName}</Text>
+                  <Text style={styles.ticketLocation}>{issuedTickets[0]?.eventLocation}</Text>
+                  <Text style={styles.ticketDate}>
+                    {issuedTickets[0]?.eventDate && formatDateWithDay(issuedTickets[0].eventDate)}
+                  </Text>
+                  {issuedTickets[0]?.timeSlot && (
+                    <Text style={styles.ticketTimeSlot}>
+                      {formatTimeSlotDisplay(
+                        issuedTickets[0].timeSlot.start_time,
+                        issuedTickets[0].timeSlot.end_time
+                      )}
+                    </Text>
+                  )}
+                  <View style={styles.reservationNotice}>
+                    <Text style={styles.reservationNoticeText}>
+                      ※ お客様がこのQRコードを読み取り、取得ボタンを押すと整理番号が確定します
+                    </Text>
+                  </View>
                 </View>
-              </View>
+                <View style={styles.qrContainer}>
+                  <Text style={styles.qrLabel}>このQRコードを読み取ってください</Text>
+                  <View style={styles.qrCode}>
+                    <QRCodeSVG
+                      value={`${process.env.EXPO_PUBLIC_TICKET_PAGE_URL}/?token=${issuedTickets[0].qr_token}`}
+                      size={200}
+                    />
+                  </View>
+                </View>
+              </>
+            ) : (
+              /* 通常の発券の場合 */
+              <>
+                <Text style={styles.modalTitle}>
+                  発券完了{issuedTickets.length > 1 ? `（${issuedTickets.length}枚）` : ''}
+                </Text>
+                {issuedTickets.length > 0 && (
+                  <View style={styles.ticketInfo}>
+                    {issuedTickets.length === 1 ? (
+                      <Text style={styles.ticketNumber}>No. {issuedTickets[0]?.ticket_number}</Text>
+                    ) : (
+                      <Text style={styles.ticketNumber}>
+                        No. {issuedTickets[0]?.ticket_number} ~ {issuedTickets[issuedTickets.length - 1]?.ticket_number}
+                      </Text>
+                    )}
+                    <Text style={styles.ticketEvent}>{issuedTickets[0]?.eventName}</Text>
+                    <Text style={styles.ticketLocation}>{issuedTickets[0]?.eventLocation}</Text>
+                    <Text style={styles.ticketDate}>
+                      {issuedTickets[0]?.eventDate && formatDateWithDay(issuedTickets[0].eventDate)}
+                    </Text>
+                    {issuedTickets[0]?.timeSlot && (
+                      <Text style={styles.ticketTimeSlot}>
+                        {formatTimeSlotDisplay(
+                          issuedTickets[0].timeSlot.start_time,
+                          issuedTickets[0].timeSlot.end_time
+                        )}
+                      </Text>
+                    )}
+                  </View>
+                )}
+                {/* デジタル媒体のQRコード表示（1グループ1つ） */}
+                {issuedTickets.length > 0 && issuedTickets[0]?.medium_type === MEDIUM_TYPES.DIGITAL && issuedTickets[0]?.qr_token && (
+                  <View style={styles.qrContainer}>
+                    <Text style={styles.qrLabel}>このQRコードを読み取ってください</Text>
+                    <View style={styles.qrCode}>
+                      <QRCodeSVG
+                        value={`${process.env.EXPO_PUBLIC_TICKET_PAGE_URL}/?token=${issuedTickets[0].qr_token}`}
+                        size={200}
+                      />
+                    </View>
+                  </View>
+                )}
+              </>
             )}
 
             <TouchableOpacity style={styles.closeButton} onPress={handleCloseModal}>
@@ -660,22 +843,91 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: SPACING.MD,
   },
-  nextNumberContainer: {
+  /** 状況表示セクション */
+  statusSection: {
     backgroundColor: COLORS.CARD_BACKGROUND,
-    padding: SPACING.LG,
+    padding: SPACING.MD,
     borderRadius: 12,
     marginBottom: SPACING.MD,
+  },
+  /** 順次案内制カード */
+  sequentialCard: {
+    backgroundColor: COLORS.BACKGROUND,
+    borderRadius: 12,
+    padding: SPACING.LG,
+  },
+  sequentialRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: SPACING.LG,
+  },
+  sequentialItem: {
     alignItems: 'center',
   },
-  nextNumberLabel: {
+  sequentialLabel: {
+    fontSize: FONT_SIZES.SM,
+    color: COLORS.TEXT_SECONDARY,
+    marginBottom: SPACING.XS,
+  },
+  sequentialValue: {
+    fontSize: FONT_SIZES.TITLE,
+    fontWeight: 'bold',
+    color: COLORS.TEXT,
+  },
+  waitTimeContainer: {
+    alignItems: 'center',
+    paddingTop: SPACING.MD,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.BORDER,
+  },
+  waitTimeLabel: {
     fontSize: FONT_SIZES.MD,
     color: COLORS.TEXT_SECONDARY,
     marginBottom: SPACING.XS,
   },
-  nextNumber: {
-    fontSize: FONT_SIZES.TITLE + 16,
+  waitTimeValue: {
+    fontSize: FONT_SIZES.HEADING,
     fontWeight: 'bold',
     color: COLORS.PRIMARY,
+  },
+  quantitySection: {
+    marginTop: SPACING.MD,
+    marginBottom: SPACING.SM,
+  },
+  quantityLabel: {
+    fontSize: FONT_SIZES.MD,
+    fontWeight: '600',
+    color: COLORS.TEXT,
+    marginBottom: SPACING.XS,
+  },
+  quantityControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.MD,
+  },
+  quantityButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.PRIMARY,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quantityButtonText: {
+    fontSize: FONT_SIZES.XL,
+    fontWeight: 'bold',
+    color: COLORS.CARD_BACKGROUND,
+  },
+  quantityButtonTextDisabled: {
+    color: COLORS.TEXT_SECONDARY,
+  },
+  quantityValue: {
+    fontSize: FONT_SIZES.TITLE,
+    fontWeight: 'bold',
+    color: COLORS.TEXT,
+    minWidth: 40,
+    textAlign: 'center',
   },
   issueButton: {
     marginTop: SPACING.SM,
@@ -731,6 +983,19 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.LG,
     fontWeight: '600',
     color: COLORS.PRIMARY,
+  },
+  reservationNotice: {
+    backgroundColor: COLORS.WARNING + '20',
+    padding: SPACING.SM,
+    borderRadius: 8,
+    marginTop: SPACING.MD,
+    borderWidth: 1,
+    borderColor: COLORS.WARNING,
+  },
+  reservationNoticeText: {
+    fontSize: FONT_SIZES.SM,
+    color: COLORS.TEXT,
+    textAlign: 'center',
   },
   qrContainer: {
     alignItems: 'center',

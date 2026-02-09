@@ -13,7 +13,7 @@
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: #FFFFFF;
       min-height: 100vh;
       display: flex;
       justify-content: center;
@@ -24,14 +24,14 @@
     /* ローディング */
     .loading-container {
       text-align: center;
-      color: #fff;
+      color: #333;
     }
 
     .spinner {
       width: 40px;
       height: 40px;
-      border: 4px solid rgba(255, 255, 255, 0.3);
-      border-top-color: #fff;
+      border: 4px solid rgba(0, 0, 0, 0.1);
+      border-top-color: #007AFF;
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
       margin: 0 auto 16px;
@@ -42,13 +42,44 @@
     }
 
     .loading-text {
-      font-size: 16px;
+      font-size: 18px;
+      color: #333;
+    }
+
+    /* 取得ボタン */
+    .claim-button {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+      border: none;
+      padding: 16px 32px;
+      border-radius: 30px;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+      transition: transform 0.2s, box-shadow 0.2s;
+      margin-top: 20px;
+    }
+
+    .claim-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+    }
+
+    .claim-button:active {
+      transform: translateY(0);
+    }
+
+    .claim-button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
     }
 
     /* エラー */
     .error-container {
       text-align: center;
-      color: #fff;
+      color: #333;
       max-width: 360px;
     }
 
@@ -58,14 +89,14 @@
     }
 
     .error-title {
-      font-size: 20px;
+      font-size: 22px;
       font-weight: bold;
       margin-bottom: 8px;
     }
 
     .error-message {
-      font-size: 14px;
-      opacity: 0.9;
+      font-size: 16px;
+      color: #666;
     }
 
     /* チケットカード */
@@ -86,7 +117,7 @@
     }
 
     .ticket-label {
-      font-size: 12px;
+      font-size: 16px;
       text-transform: uppercase;
       letter-spacing: 2px;
       opacity: 0.9;
@@ -94,9 +125,15 @@
     }
 
     .ticket-number {
-      font-size: 56px;
+      font-size: 64px;
       font-weight: bold;
       line-height: 1.1;
+    }
+
+    .ticket-quantity {
+      font-size: 18px;
+      opacity: 0.85;
+      margin-top: 4px;
     }
 
     .ticket-body {
@@ -104,7 +141,7 @@
     }
 
     .ticket-event-name {
-      font-size: 22px;
+      font-size: 24px;
       font-weight: bold;
       color: #1a1a2e;
       margin-bottom: 16px;
@@ -132,7 +169,7 @@
     .ticket-divider-circle-right {
       width: 20px;
       height: 20px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: #FFFFFF;
       border-radius: 50%;
       position: absolute;
       top: 50%;
@@ -165,14 +202,14 @@
     }
 
     .info-label {
-      font-size: 13px;
+      font-size: 16px;
       color: #888;
       flex-shrink: 0;
       margin-right: 12px;
     }
 
     .info-value {
-      font-size: 15px;
+      font-size: 18px;
       font-weight: 600;
       color: #1a1a2e;
       text-align: right;
@@ -181,9 +218,9 @@
     /* タイプバッジ */
     .type-badge {
       display: inline-block;
-      padding: 3px 10px;
+      padding: 4px 12px;
       border-radius: 4px;
-      font-size: 12px;
+      font-size: 14px;
       font-weight: 600;
       color: #fff;
     }
@@ -193,30 +230,20 @@
     }
 
     .type-badge.sequential {
-      background-color: #34C759;
+      background-color: #FF8C00;
     }
 
     .ticket-footer {
       padding: 16px 24px;
-      background: #f8f9fa;
+      background: #FFF8E1;
       text-align: center;
-      border-top: 1px solid #f0f0f0;
+      border-top: 2px solid #FFB300;
     }
 
     .footer-text {
-      font-size: 12px;
-      color: #888;
-    }
-
-    .saved-badge {
-      display: inline-block;
-      background: #e8f5e9;
-      color: #2e7d32;
-      padding: 4px 12px;
-      border-radius: 12px;
-      font-size: 12px;
-      font-weight: 600;
-      margin-top: 8px;
+      font-size: 16px;
+      color: #E65100;
+      font-weight: bold;
     }
 
     /* 非表示 */
@@ -239,11 +266,32 @@
     <p id="error-message" class="error-message">QRコードが無効か、有効期限が切れている可能性があります。</p>
   </div>
 
+  <!-- 取得ボタン表示（予約の場合） -->
+  <div id="reservation" class="ticket-card hidden">
+    <div class="ticket-header">
+      <p class="ticket-label">整理券取得</p>
+      <p id="reservation-quantity" class="ticket-quantity"></p>
+    </div>
+    <div class="ticket-body">
+      <p id="reservation-event-name" class="ticket-event-name"></p>
+      <div class="ticket-divider">
+        <div class="ticket-divider-circle-left"></div>
+        <div class="ticket-divider-circle-right"></div>
+      </div>
+      <div id="reservation-info" class="ticket-info"></div>
+      <button id="claim-button" class="claim-button">整理券を取得する</button>
+    </div>
+    <div class="ticket-footer" style="background: #f8f9fa; border-top: 1px solid #f0f0f0;">
+      <p class="footer-text" style="color: #888; font-weight: normal;">取得ボタンを押すと整理番号が確定します</p>
+    </div>
+  </div>
+
   <!-- チケット表示 -->
   <div id="ticket" class="ticket-card hidden">
     <div class="ticket-header">
       <p class="ticket-label">整理番号</p>
       <p id="ticket-number" class="ticket-number"></p>
+      <p id="ticket-quantity" class="ticket-quantity hidden"></p>
     </div>
     <div class="ticket-body">
       <p id="ticket-event-name" class="ticket-event-name"></p>
@@ -254,8 +302,7 @@
       <div id="ticket-info" class="ticket-info"></div>
     </div>
     <div class="ticket-footer">
-      <p class="footer-text">この画面をスクリーンショットで保存してください</p>
-      <p id="saved-badge" class="saved-badge hidden">端末に保存済み</p>
+      <p class="footer-text">&#9888; この画面をスクリーンショットで保存してください</p>
     </div>
   </div>
 
@@ -264,7 +311,6 @@
   <script>
     /**
      * Supabase設定
-     * Cloudflare Pagesの環境変数、またはここに直接設定
      */
     const SUPABASE_URL = 'https://qlldsvpkcfftbibujltf.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFsbGRzdnBrY2ZmdGJpYnVqbHRmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk5NDM2NTYsImV4cCI6MjA4NTUxOTY1Nn0.K5h7KXAfoHkElETk5ihxVBR0hhiMQXToCfaOwGjIP7c';
@@ -331,45 +377,55 @@
     };
 
     /**
-     * チケット情報を表示
-     * @param {Object} ticketData - チケットデータ
+     * チケット情報を表示（複数枚対応）
+     * @param {Array} tickets - チケットデータの配列（ticket_number昇順）
      */
-    const showTicket = (ticketData) => {
+    const showTickets = (tickets) => {
       toggleElement('loading', false);
       toggleElement('error', false);
       toggleElement('ticket', true);
 
-      /** 整理番号 */
-      document.getElementById('ticket-number').textContent = ticketData.ticket_number;
+      /** 最初のチケット（共通情報の取得元） */
+      const first = tickets[0];
+
+      /** 整理番号（1枚なら番号、複数なら範囲表示） */
+      if (tickets.length === 1) {
+        document.getElementById('ticket-number').textContent = first.ticket_number;
+      } else {
+        const last = tickets[tickets.length - 1];
+        document.getElementById('ticket-number').textContent = `${first.ticket_number} ~ ${last.ticket_number}`;
+        document.getElementById('ticket-quantity').textContent = `${tickets.length}枚`;
+        toggleElement('ticket-quantity', true);
+      }
 
       /** 企画名 */
-      document.getElementById('ticket-event-name').textContent = ticketData.events.name;
+      document.getElementById('ticket-event-name').textContent = first.events.name;
 
       /** 情報セクション */
       const infoContainer = document.getElementById('ticket-info');
       infoContainer.innerHTML = '';
 
       /** 企画タイプ */
-      const typeLabel = EVENT_TYPE_LABELS[ticketData.events.type] || ticketData.events.type;
-      const typeBadgeClass = ticketData.events.type === 'time_slot' ? 'time-slot' : 'sequential';
+      const typeLabel = EVENT_TYPE_LABELS[first.events.type] || first.events.type;
+      const typeBadgeClass = first.events.type === 'time_slot' ? 'time-slot' : 'sequential';
       addInfoRow(infoContainer, 'タイプ', `<span class="type-badge ${typeBadgeClass}">${typeLabel}</span>`);
 
       /** 場所 */
-      addInfoRow(infoContainer, '場所', ticketData.events.location);
+      addInfoRow(infoContainer, '場所', first.events.location);
 
       /** 日付 */
-      addInfoRow(infoContainer, '日付', formatDateWithDay(ticketData.event_dates.date));
+      addInfoRow(infoContainer, '日付', formatDateWithDay(first.event_dates.date));
 
       /** 時間枠（時間枠定員制の場合のみ） */
-      if (ticketData.time_slots) {
+      if (first.time_slots) {
         addInfoRow(infoContainer, '時間枠', formatTimeSlot(
-          ticketData.time_slots.start_time,
-          ticketData.time_slots.end_time
+          first.time_slots.start_time,
+          first.time_slots.end_time
         ));
       }
 
       /** 発行日時 */
-      const issuedAt = new Date(ticketData.issued_at);
+      const issuedAt = new Date(first.issued_at);
       const issuedText = `${issuedAt.getMonth() + 1}/${issuedAt.getDate()} ${String(issuedAt.getHours()).padStart(2, '0')}:${String(issuedAt.getMinutes()).padStart(2, '0')}`;
       addInfoRow(infoContainer, '発行日時', issuedText);
     };
@@ -391,20 +447,215 @@
     };
 
     /**
+     * 取得ボタン押下処理（実際の発券を行う）
+     * @param {Object} reservation - 予約データ
+     * @param {string} token - QRトークン
+     * @param {boolean} isAutomatic - 自動発券かどうか（読み込み時点で発券する場合true）
+     */
+    const handleClaim = async (reservation, token, isAutomatic = false) => {
+      // ボタン経由の場合のみボタンを無効化
+      if (!isAutomatic) {
+        const claimButton = document.getElementById('claim-button');
+        claimButton.disabled = true;
+        claimButton.textContent = '発券中...';
+      }
+
+      try {
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const details = reservation.details;
+
+        // 1. 再度予約の状態を確認（二重取得防止）
+        const { data: currentReservation } = await supabaseClient
+          .from('ticket_logs')
+          .select('action')
+          .eq('id', reservation.id)
+          .single();
+
+        if (currentReservation.action !== 'pending') {
+          showError('この整理券は既に取得済みです。');
+          return;
+        }
+
+        // 2. 企画開催日の次の整理番号を取得
+        const { data: eventDate } = await supabaseClient
+          .from('event_dates')
+          .select('next_ticket_number')
+          .eq('id', details.event_date_id)
+          .single();
+
+        let startTicketNumber;
+
+        // 3. 時間枠定員制の場合
+        if (details.time_slot_id) {
+          const { data: timeSlot } = await supabaseClient
+            .from('time_slots')
+            .select('current_count, start_ticket_number')
+            .eq('id', details.time_slot_id)
+            .single();
+
+          startTicketNumber = timeSlot.start_ticket_number + timeSlot.current_count;
+        } else {
+          // 順次案内制の場合
+          startTicketNumber = eventDate.next_ticket_number;
+        }
+
+        // 4. チケットデータを作成
+        const ticketsToInsert = [];
+        for (let i = 0; i < details.quantity; i++) {
+          ticketsToInsert.push({
+            event_id: details.event_id,
+            event_date_id: details.event_date_id,
+            time_slot_id: details.time_slot_id,
+            ticket_number: startTicketNumber + i,
+            medium_type: 'digital',
+            qr_token: token,
+          });
+        }
+
+        // 5. チケットを一括挿入
+        const { data: tickets, error: insertError } = await supabaseClient
+          .from('tickets')
+          .insert(ticketsToInsert)
+          .select(`
+            ticket_number,
+            medium_type,
+            issued_at,
+            events:event_id (name, location, type),
+            event_dates:event_date_id (date),
+            time_slots:time_slot_id (start_time, end_time)
+          `);
+
+        if (insertError) throw insertError;
+
+        // 6. 順次案内制の場合は次の整理番号を更新
+        if (!details.time_slot_id) {
+          await supabaseClient
+            .from('event_dates')
+            .update({ next_ticket_number: startTicketNumber + details.quantity })
+            .eq('id', details.event_date_id);
+        }
+
+        // 7. 時間枠定員制の場合は発券数を更新
+        if (details.time_slot_id) {
+          const { data: currentSlot } = await supabaseClient
+            .from('time_slots')
+            .select('current_count')
+            .eq('id', details.time_slot_id)
+            .single();
+
+          const newCount = (currentSlot?.current_count || 0) + details.quantity;
+          await supabaseClient
+            .from('time_slots')
+            .update({ current_count: newCount })
+            .eq('id', details.time_slot_id);
+
+          // 満員チェック
+          if (details.capacity && newCount >= details.capacity) {
+            await supabaseClient
+              .from('time_slots')
+              .update({ status: 'full' })
+              .eq('id', details.time_slot_id);
+          }
+        }
+
+        // 8. 予約を claimed に更新
+        await supabaseClient
+          .from('ticket_logs')
+          .update({ action: 'claimed', ticket_id: tickets[0].id })
+          .eq('id', reservation.id);
+
+        // 9. 発券ログを記録
+        await supabaseClient
+          .from('ticket_logs')
+          .insert({
+            ticket_id: tickets[0].id,
+            action: 'claimed_digital',
+            details: {
+              event_id: details.event_id,
+              event_date_id: details.event_date_id,
+              time_slot_id: details.time_slot_id,
+              ticket_numbers: `${startTicketNumber}~${startTicketNumber + details.quantity - 1}`,
+              quantity: details.quantity,
+              medium_type: 'digital',
+            },
+          });
+
+        // 10. チケット情報を表示
+        toggleElement('reservation', false);
+        showTickets(tickets);
+        saveToLocalStorage(token, tickets);
+
+      } catch (error) {
+        console.error('取得エラー:', error);
+        showError('整理券の取得に失敗しました。もう一度お試しください。');
+
+        // ボタン経由の場合のみボタンを復元
+        if (!isAutomatic) {
+          const claimButton = document.getElementById('claim-button');
+          claimButton.disabled = false;
+          claimButton.textContent = '整理券を取得する';
+        }
+      }
+    };
+
+    /**
+     * 予約情報を表示（取得ボタン付き）
+     * @param {Object} reservation - 予約データ
+     * @param {Object} eventData - 企画データ
+     * @param {Object} dateData - 日付データ
+     * @param {Object} slotData - 時間枠データ（任意）
+     * @param {string} token - QRトークン
+     */
+    const showReservation = (reservation, eventData, dateData, slotData, token) => {
+      toggleElement('loading', false);
+      toggleElement('error', false);
+      toggleElement('reservation', true);
+
+      /** 枚数表示 */
+      document.getElementById('reservation-quantity').textContent = `${reservation.details.quantity}枚`;
+
+      /** 企画名 */
+      document.getElementById('reservation-event-name').textContent = eventData.name;
+
+      /** 情報セクション */
+      const infoContainer = document.getElementById('reservation-info');
+      infoContainer.innerHTML = '';
+
+      /** 企画タイプ */
+      const typeLabel = EVENT_TYPE_LABELS[eventData.type] || eventData.type;
+      const typeBadgeClass = eventData.type === 'time_slot' ? 'time-slot' : 'sequential';
+      addInfoRow(infoContainer, 'タイプ', `<span class="type-badge ${typeBadgeClass}">${typeLabel}</span>`);
+
+      /** 場所 */
+      addInfoRow(infoContainer, '場所', eventData.location);
+
+      /** 日付 */
+      addInfoRow(infoContainer, '日付', formatDateWithDay(dateData.date));
+
+      /** 時間枠（時間枠定員制の場合のみ） */
+      if (slotData) {
+        addInfoRow(infoContainer, '時間枠', formatTimeSlot(slotData.start_time, slotData.end_time));
+      }
+
+      /** 取得ボタンのイベントリスナー */
+      const claimButton = document.getElementById('claim-button');
+      claimButton.onclick = () => handleClaim(reservation, token);
+    };
+
+    /**
      * localStorage にチケットデータを保存
      * @param {string} token - QRトークン
-     * @param {Object} ticketData - チケットデータ
+     * @param {Array} tickets - チケットデータの配列
      */
-    const saveToLocalStorage = (token, ticketData) => {
+    const saveToLocalStorage = (token, tickets) => {
       try {
         /** 保存済みチケット一覧 */
         const savedTickets = JSON.parse(localStorage.getItem('saved_tickets') || '{}');
         savedTickets[token] = {
-          data: ticketData,
+          data: tickets,
           savedAt: new Date().toISOString(),
         };
         localStorage.setItem('saved_tickets', JSON.stringify(savedTickets));
-        toggleElement('saved-badge', true);
       } catch (e) {
         console.error('localStorage保存エラー:', e);
       }
@@ -413,7 +664,7 @@
     /**
      * localStorage からチケットデータを取得
      * @param {string} token - QRトークン
-     * @returns {Object|null} キャッシュされたチケットデータ
+     * @returns {Array|null} キャッシュされたチケットデータ配列
      */
     const loadFromLocalStorage = (token) => {
       try {
@@ -441,16 +692,46 @@
       // localStorage にキャッシュがあれば先に表示
       const cachedData = loadFromLocalStorage(token);
       if (cachedData) {
-        showTicket(cachedData);
-        toggleElement('saved-badge', true);
+        // 旧形式（単一オブジェクト）の場合は配列に変換
+        const tickets = Array.isArray(cachedData) ? cachedData : [cachedData];
+        showTickets(tickets);
         return;
       }
 
-      // Supabase からチケットデータを取得
+      // Supabase から予約またはチケットを取得
       try {
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        const { data, error } = await supabaseClient
+        // 1. まず予約（ticket_logs）をチェック
+        const { data: reservation } = await supabaseClient
+          .from('ticket_logs')
+          .select('*')
+          .eq('action', 'pending')
+          .eq('details->>qr_token', token)
+          .single();
+
+        if (reservation) {
+          // 予約が見つかった場合 → 即座に発券処理を実行（読み込み = 発券）
+          await handleClaim(reservation, token, true);
+          return;
+        }
+
+        // 2. claimed済みの予約があるかチェック（別端末からのアクセス防止）
+        const { data: claimedReservation } = await supabaseClient
+          .from('ticket_logs')
+          .select('id')
+          .eq('action', 'claimed')
+          .eq('details->>qr_token', token)
+          .single();
+
+        if (claimedReservation) {
+          // ローカルストレージにない + claimed済み = 別端末からのアクセス
+          showError('この整理券は既に別の端末で取得済みです。');
+          return;
+        }
+
+        // 3. 予約もない場合はチケット（tickets）をチェック（紙チケット等）
+        const { data: tickets, error } = await supabaseClient
           .from('tickets')
           .select(`
             ticket_number,
@@ -470,20 +751,20 @@
             )
           `)
           .eq('qr_token', token)
-          .single();
+          .order('ticket_number', { ascending: true });
 
-        if (error || !data) {
+        if (error || !tickets || tickets.length === 0) {
           showError('整理券が見つかりませんでした。QRコードが無効か、有効期限が切れている可能性があります。');
           return;
         }
 
-        // 表示
-        showTicket(data);
+        // チケットを表示
+        showTickets(tickets);
 
         // localStorage に保存
-        saveToLocalStorage(token, data);
+        saveToLocalStorage(token, tickets);
       } catch (e) {
-        console.error('チケット取得エラー:', e);
+        console.error('データ取得エラー:', e);
         showError('整理券の読み込みに失敗しました。通信環境を確認してください。');
       }
     };

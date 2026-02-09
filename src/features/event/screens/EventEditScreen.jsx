@@ -76,11 +76,13 @@ const EventEditScreen = () => {
   /** 選択中の開催日ID */
   const [selectedDateId, setSelectedDateId] = useState(null);
 
-  /** ステータス選択肢 */
-  const statusOptions = Object.entries(STATUS_LABELS).map(([value, label]) => ({
-    label,
-    value,
-  }));
+  /** ステータス選択肢（満員は自動制御のため除外） */
+  const statusOptions = Object.entries(STATUS_LABELS)
+    .filter(([value]) => value !== STATUS.FULL)
+    .map(([value, label]) => ({
+      label,
+      value,
+    }));
 
   // 企画データが読み込まれたらフォームに反映
   useEffect(() => {
@@ -170,7 +172,7 @@ const EventEditScreen = () => {
 
   /**
    * 開催日のステータスを変更
-   * 時間枠定員制の場合、満員・発券停止中以外の時間枠も一括で変更
+   * 時間枠定員制の場合、全ての時間枠ステータスも一括で上書き
    * @param {string} eventDateId - 企画開催日ID
    * @param {string} newStatus - 新しいステータス
    */
@@ -188,13 +190,12 @@ const EventEditScreen = () => {
         return;
       }
 
-      // 時間枠定員制の場合、該当日の時間枠ステータスも一括更新
+      // 時間枠定員制の場合、該当日の時間枠ステータスを一括上書き（満員は除外）
       if (event?.type === EVENT_TYPES.TIME_SLOT) {
         const targetDate = event.event_dates?.find(d => d.id === eventDateId);
         if (targetDate?.time_slots) {
-          // 満員・発券停止中以外の時間枠を更新
           const updatePromises = targetDate.time_slots
-            .filter(slot => slot.status !== STATUS.FULL && slot.status !== STATUS.PAUSED)
+            .filter(slot => slot.status !== STATUS.FULL)
             .map(slot => changeTimeSlotStatus(slot.id, newStatus));
 
           await Promise.all(updatePromises);
@@ -333,87 +334,112 @@ const EventEditScreen = () => {
           {/* 時間枠定員制の場合は選択中の日付の時間枠ステータス管理 */}
           {event.type === EVENT_TYPES.TIME_SLOT && event.event_dates
             ?.filter(d => d.id === selectedDateId)
-            .map((dateItem) => (
-              <View key={`slots-${dateItem.id}`} style={styles.timeSlotsSection}>
-                <Text style={styles.sectionTitle}>時間枠ステータス</Text>
-                <View style={[styles.timeSlotsGrid, isMobile && styles.timeSlotsGridMobile]}>
-                  {/* 左列 */}
-                  <View style={[styles.timeSlotsColumn, isMobile && styles.timeSlotsColumnMobile]}>
-                    {dateItem.time_slots?.slice(0, Math.ceil(dateItem.time_slots.length / 2)).map((slot) => {
-                      const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot);
-                      return (
-                        <View key={slot.id} style={[styles.slotCard, isMobile && styles.slotCardMobile]}>
-                          <View style={[styles.slotLeft, isMobile && styles.slotLeftMobile]}>
-                            <View style={styles.slotHeader}>
-                              <Text style={styles.slotTime}>
-                                {formatTimeSlotDisplay(slot.start_time, slot.end_time)}
-                              </Text>
-                              <View style={[styles.slotStatusBadge, { backgroundColor: STATUS_COLORS[slot.status] }]}>
-                                <Text style={styles.slotStatusBadgeText}>{STATUS_LABELS[slot.status]}</Text>
+            .map((dateItem) => {
+              /** この日のステータスが発券中かどうか */
+              const isDateActive = dateItem.status === STATUS.ACTIVE;
+              /** 時間枠セレクト無効時のツールチップメッセージ（日ステータス起因） */
+              const dateInactiveReason = '時間枠ステータスを変更するには、画面上部にある現在のステータスを発券中に切り替えてください。';
+              /** 時間枠セレクト無効時のツールチップメッセージ（満員起因） */
+              const slotFullReason = '満員のため手動でステータスを変更できません。';
+
+              return (
+                <View key={`slots-${dateItem.id}`} style={styles.timeSlotsSection}>
+                  <Text style={styles.sectionTitle}>時間枠ステータス</Text>
+                  <View style={[styles.timeSlotsGrid, isMobile && styles.timeSlotsGridMobile]}>
+                    {/* 左列 */}
+                    <View style={[styles.timeSlotsColumn, isMobile && styles.timeSlotsColumnMobile]}>
+                      {dateItem.time_slots?.slice(0, Math.ceil(dateItem.time_slots.length / 2)).map((slot) => {
+                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot);
+                        /** この時間枠が満員かどうか */
+                        const isSlotFull = slot.status === STATUS.FULL;
+                        /** この時間枠のセレクトを無効にするかどうか */
+                        const isSlotDisabled = !isDateActive || isSlotFull;
+                        /** 無効理由のツールチップ */
+                        const slotDisabledReason = isSlotFull ? slotFullReason : dateInactiveReason;
+                        return (
+                          <View key={slot.id} style={[styles.slotCard, isMobile && styles.slotCardMobile]}>
+                            <View style={[styles.slotLeft, isMobile && styles.slotLeftMobile]}>
+                              <View style={styles.slotHeader}>
+                                <Text style={styles.slotTime}>
+                                  {formatTimeSlotDisplay(slot.start_time, slot.end_time)}
+                                </Text>
+                                <View style={[styles.slotStatusBadge, { backgroundColor: STATUS_COLORS[slot.status] }]}>
+                                  <Text style={styles.slotStatusBadgeText}>{STATUS_LABELS[slot.status]}</Text>
+                                </View>
+                              </View>
+                              <View style={styles.slotCountRow}>
+                                <Text style={[styles.slotCountCurrent, { color: statusColor }]}>
+                                  {slot.current_count}
+                                </Text>
+                                <Text style={styles.slotCount}>
+                                  /{event.capacity_per_slot}名
+                                </Text>
                               </View>
                             </View>
-                            <View style={styles.slotCountRow}>
-                              <Text style={[styles.slotCountCurrent, { color: statusColor }]}>
-                                {slot.current_count}
-                              </Text>
-                              <Text style={styles.slotCount}>
-                                /{event.capacity_per_slot}名
-                              </Text>
+                            <View style={[styles.slotRight, isMobile && styles.slotRightMobile]}>
+                              <Select
+                                label={isMobile ? '' : 'ステータス変更'}
+                                value={slot.status}
+                                onValueChange={(newStatus) => handleTimeSlotStatusChange(slot.id, newStatus)}
+                                options={statusOptions}
+                                style={styles.statusSelect}
+                                disabled={isSlotDisabled}
+                                disabledReason={slotDisabledReason}
+                              />
                             </View>
                           </View>
-                          <View style={[styles.slotRight, isMobile && styles.slotRightMobile]}>
-                            <Select
-                              label={isMobile ? '' : 'ステータス変更'}
-                              value={slot.status}
-                              onValueChange={(newStatus) => handleTimeSlotStatusChange(slot.id, newStatus)}
-                              options={statusOptions}
-                              style={styles.statusSelect}
-                            />
-                          </View>
-                        </View>
-                      );
-                    })}
-                  </View>
-                  {/* 右列 */}
-                  <View style={[styles.timeSlotsColumn, isMobile && styles.timeSlotsColumnMobile]}>
-                    {dateItem.time_slots?.slice(Math.ceil(dateItem.time_slots.length / 2)).map((slot) => {
-                      const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot);
-                      return (
-                        <View key={slot.id} style={[styles.slotCard, isMobile && styles.slotCardMobile]}>
-                          <View style={[styles.slotLeft, isMobile && styles.slotLeftMobile]}>
-                            <View style={styles.slotHeader}>
-                              <Text style={styles.slotTime}>
-                                {formatTimeSlotDisplay(slot.start_time, slot.end_time)}
-                              </Text>
-                              <View style={[styles.slotStatusBadge, { backgroundColor: STATUS_COLORS[slot.status] }]}>
-                                <Text style={styles.slotStatusBadgeText}>{STATUS_LABELS[slot.status]}</Text>
+                        );
+                      })}
+                    </View>
+                    {/* 右列 */}
+                    <View style={[styles.timeSlotsColumn, isMobile && styles.timeSlotsColumnMobile]}>
+                      {dateItem.time_slots?.slice(Math.ceil(dateItem.time_slots.length / 2)).map((slot) => {
+                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot);
+                        /** この時間枠が満員かどうか */
+                        const isSlotFull = slot.status === STATUS.FULL;
+                        /** この時間枠のセレクトを無効にするかどうか */
+                        const isSlotDisabled = !isDateActive || isSlotFull;
+                        /** 無効理由のツールチップ */
+                        const slotDisabledReason = isSlotFull ? slotFullReason : dateInactiveReason;
+                        return (
+                          <View key={slot.id} style={[styles.slotCard, isMobile && styles.slotCardMobile]}>
+                            <View style={[styles.slotLeft, isMobile && styles.slotLeftMobile]}>
+                              <View style={styles.slotHeader}>
+                                <Text style={styles.slotTime}>
+                                  {formatTimeSlotDisplay(slot.start_time, slot.end_time)}
+                                </Text>
+                                <View style={[styles.slotStatusBadge, { backgroundColor: STATUS_COLORS[slot.status] }]}>
+                                  <Text style={styles.slotStatusBadgeText}>{STATUS_LABELS[slot.status]}</Text>
+                                </View>
+                              </View>
+                              <View style={styles.slotCountRow}>
+                                <Text style={[styles.slotCountCurrent, { color: statusColor }]}>
+                                  {slot.current_count}
+                                </Text>
+                                <Text style={styles.slotCount}>
+                                  /{event.capacity_per_slot}名
+                                </Text>
                               </View>
                             </View>
-                            <View style={styles.slotCountRow}>
-                              <Text style={[styles.slotCountCurrent, { color: statusColor }]}>
-                                {slot.current_count}
-                              </Text>
-                              <Text style={styles.slotCount}>
-                                /{event.capacity_per_slot}名
-                              </Text>
+                            <View style={[styles.slotRight, isMobile && styles.slotRightMobile]}>
+                              <Select
+                                label={isMobile ? '' : 'ステータス変更'}
+                                value={slot.status}
+                                onValueChange={(newStatus) => handleTimeSlotStatusChange(slot.id, newStatus)}
+                                options={statusOptions}
+                                style={styles.statusSelect}
+                                disabled={isSlotDisabled}
+                                disabledReason={slotDisabledReason}
+                              />
                             </View>
                           </View>
-                          <View style={[styles.slotRight, isMobile && styles.slotRightMobile]}>
-                            <Select
-                              label={isMobile ? '' : 'ステータス変更'}
-                              value={slot.status}
-                              onValueChange={(newStatus) => handleTimeSlotStatusChange(slot.id, newStatus)}
-                              options={statusOptions}
-                              style={styles.statusSelect}
-                            />
-                          </View>
-                        </View>
-                      );
-                    })}
+                        );
+                      })}
+                    </View>
                   </View>
                 </View>
-              </View>
-            ))}
+              );
+            })}
 
           <View style={styles.buttonContainer}>
             <Button
