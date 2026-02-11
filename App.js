@@ -6,6 +6,7 @@
 import React from 'react';
 import { LogBox, Platform } from 'react-native';
 import AppNavigator from './src/navigation/AppNavigator';
+import { AuthProvider } from './src/shared/contexts/AuthContext';
 
 /**
  * React Navigation がWeb環境で発生させる警告を抑制
@@ -41,5 +42,9 @@ if (Platform.OS === 'web') {
  * @returns {JSX.Element} アプリケーション
  */
 export default function App() {
-  return <AppNavigator />;
+  return (
+    <AuthProvider>
+      <AppNavigator />
+    </AuthProvider>
+  );
 }

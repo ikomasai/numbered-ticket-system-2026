@@ -18,6 +18,7 @@ import { COLORS, FONT_SIZES, SPACING } from '../constants';
  * @param {boolean} props.multiline - 複数行入力
  * @param {number} props.numberOfLines - 行数
  * @param {boolean} props.editable - 編集可能
+ * @param {boolean} props.secureTextEntry - パスワード入力（文字を隠す）
  * @param {string} props.error - エラーメッセージ
  * @param {Object} props.style - 追加スタイル
  * @returns {JSX.Element} テキスト入力コンポーネント
@@ -31,6 +32,7 @@ const TextInput = ({
   multiline = false,
   numberOfLines = 1,
   editable = true,
+  secureTextEntry = false,
   error,
   style,
 }) => {
@@ -52,6 +54,7 @@ const TextInput = ({
         multiline={multiline}
         numberOfLines={numberOfLines}
         editable={editable}
+        secureTextEntry={secureTextEntry}
       />
       {error && <Text style={styles.errorText}>{error}</Text>}
     </View>

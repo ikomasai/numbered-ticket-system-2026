@@ -13,9 +13,15 @@
       "Bash(dir /b)",
       "Bash(cat:*)",
       "Bash(npx eslint:*)",
-      "Bash(npx expo export --platform web)"
+      "Bash(npx expo export --platform web)",
+      "mcp__supabase__execute_sql",
+      "Bash(ls:*)"
     ],
     "deny": [],
     "ask": []
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "supabase"
+  ]
 }
