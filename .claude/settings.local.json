@@ -11,9 +11,17 @@
       "Bash(npm uninstall:*)",
       "Bash(npx tailwindcss init)",
       "Bash(dir /b)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(npx eslint:*)",
+      "Bash(npx expo export --platform web)",
+      "mcp__supabase__execute_sql",
+      "Bash(ls:*)"
     ],
     "deny": [],
     "ask": []
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "supabase"
+  ]
 }
