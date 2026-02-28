@@ -327,7 +327,7 @@ export const selectTicketByQrToken = async (qrToken) => {
       .from('tickets')
       .select(`
         *,
-        events:event_id (
+        events_numbered_ticket:event_id (
           name,
           location,
           type
@@ -358,7 +358,7 @@ export const selectTicketByQrToken = async (qrToken) => {
 export const selectActiveEvents = async () => {
   try {
     const { data, error } = await supabase
-      .from('events')
+      .from('events_numbered_ticket')
       .select(`
         *,
         event_dates (

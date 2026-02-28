@@ -49,7 +49,7 @@ const StatusListScreen = ({ navigation }) => {
   const fetchEvents = useCallback(async () => {
     try {
       const { data, error: fetchError } = await supabase
-        .from('events')
+        .from('events_numbered_ticket')
         .select(`
           id,
           name,
