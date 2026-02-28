@@ -99,7 +99,7 @@ export const unsubscribeCallStatus = (subscription) => {
 export const selectEventsForCall = async () => {
   try {
     const { data, error } = await supabase
-      .from('events')
+      .from('events_numbered_ticket')
       .select(`
         *,
         event_dates (

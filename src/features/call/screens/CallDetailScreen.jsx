@@ -78,7 +78,7 @@ const CallDetailScreen = ({ route, navigation }) => {
   const fetchEventData = useCallback(async () => {
     try {
       const { data, error: fetchError } = await supabase
-        .from('events')
+        .from('events_numbered_ticket')
         .select(`
           *,
           event_dates (

@@ -48,7 +48,7 @@ const TicketListScreen = ({ navigation }) => {
     setError(null);
     try {
       const { data, error: fetchError } = await supabase
-        .from('events')
+        .from('events_numbered_ticket')
         .select(`
           id,
           name,

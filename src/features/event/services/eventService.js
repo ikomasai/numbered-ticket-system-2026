@@ -14,7 +14,7 @@ import { EVENT_TYPES, STATUS } from '../../../shared/constants';
 export const selectEvents = async () => {
   try {
     const { data, error } = await supabase
-      .from('events')
+      .from('events_numbered_ticket')
       .select(`
         *,
         event_dates (
@@ -52,7 +52,7 @@ export const selectEvents = async () => {
 export const selectEventById = async (id) => {
   try {
     const { data, error } = await supabase
-      .from('events')
+      .from('events_numbered_ticket')
       .select(`
         *,
         event_dates (
@@ -111,7 +111,7 @@ export const insertEvent = async (eventData) => {
 
     // 企画を登録
     const { data: event, error: eventError } = await supabase
-      .from('events')
+      .from('events_numbered_ticket')
       .insert({
         name,
         location,
@@ -220,7 +220,7 @@ export const updateEvent = async (id, updateData) => {
     }
 
     const { data, error } = await supabase
-      .from('events')
+      .from('events_numbered_ticket')
       .update(updateObj)
       .eq('id', id)
       .select()
@@ -242,7 +242,7 @@ export const updateEvent = async (id, updateData) => {
 export const deleteEvent = async (id) => {
   try {
     const { error } = await supabase
-      .from('events')
+      .from('events_numbered_ticket')
       .delete()
       .eq('id', id);
 
