@@ -276,7 +276,14 @@ const MobileTabNavigator = () => {
             tabBarIcon: ({ focused }) => <TabIcon icon="券" focused={focused} />,
           }}
         />
-        {/* 呼び出し機能は一時的に非表示（ファイルは保持） */}
+        <Tab.Screen
+          name="CallTab"
+          component={CallStack}
+          options={{
+            tabBarLabel: '呼び出し',
+            tabBarIcon: ({ focused }) => <TabIcon icon="呼" focused={focused} />,
+          }}
+        />
         <Tab.Screen
           name="StatusTab"
           component={StatusStack}
@@ -337,10 +344,11 @@ const CustomDrawerContent = (props) => {
   /** 現在のルート名 */
   const currentRoute = state.routes[state.index].name;
 
-  /** メニュー項目（呼び出し機能は一時的に非表示） */
+  /** メニュー項目 */
   const menuItems = [
     { name: 'EventTab', label: '企画管理', icon: '企', firstScreen: 'EventList' },
     { name: 'TicketTab', label: '発券', icon: '券', firstScreen: 'TicketList' },
+    { name: 'CallTab', label: '呼び出し', icon: '呼', firstScreen: 'CallList' },
     { name: 'StatusTab', label: '状況確認', icon: '状', firstScreen: 'StatusList' },
   ];
 
@@ -433,7 +441,7 @@ const DesktopDrawerNavigator = () => (
   >
     <Drawer.Screen name="EventTab" component={EventStack} />
     <Drawer.Screen name="TicketTab" component={TicketStack} />
-    {/* 呼び出し機能は一時的に非表示（ファイルは保持） */}
+    <Drawer.Screen name="CallTab" component={CallStack} />
     <Drawer.Screen name="StatusTab" component={StatusStack} />
   </Drawer.Navigator>
 );
@@ -464,8 +472,33 @@ const AppNavigator = () => {
     return <LoginScreen />;
   }
 
+  /** 画面名から日本語タイトルへのマッピング */
+  const SCREEN_TITLE_MAP = {
+    EventTab: '企画管理',
+    EventList: '企画管理',
+    EventCreate: '企画登録',
+    EventEdit: '企画編集',
+    TicketTab: '発券',
+    TicketList: '発券',
+    TicketDetail: '発券',
+    CallTab: '呼び出し',
+    CallList: '呼び出し',
+    CallDetail: '呼び出し',
+    StatusTab: '状況確認',
+    StatusList: '状況確認',
+    StatusDetail: '状況確認',
+  };
+
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      documentTitle={{
+        formatter: (options, route) => {
+          /** 画面名に対応する日本語タイトル */
+          const title = SCREEN_TITLE_MAP[route?.name] || options?.title || route?.name;
+          return `${title} | ${APP_NAME}`;
+        },
+      }}
+    >
       {isMobile ? <MobileTabNavigator /> : <DesktopDrawerNavigator />}
     </NavigationContainer>
   );
