@@ -594,7 +594,7 @@ const TicketDetailScreen = ({ route, navigation }) => {
                   )}
                   <View style={styles.reservationNotice}>
                     <Text style={styles.reservationNoticeText}>
-                      ※ お客様がこのQRコードを読み取り、取得ボタンを押すと整理番号が確定します
+                      ※ お客様がこのQRコードを読み取ると番号が確定します。QRコードは1グループにつき1つ、まとめて整理券が発行されます。
                     </Text>
                   </View>
                 </View>

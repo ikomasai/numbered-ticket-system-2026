@@ -106,6 +106,12 @@ export const selectEventById = async (id) => {
  * @returns {Promise<{data: Object|null, error: Error|null}>} 登録された企画データ
  */
 export const insertEvent = async (eventData) => {
+  /** 途中失敗時に企画を削除するロールバック関数 */
+  const rollback = async (eventId) => {
+    // events_numbered_ticketを削除すればevent_dates・time_slots・call_statusもCASCADE削除される
+    await supabase.from('events_numbered_ticket').delete().eq('id', eventId);
+  };
+
   try {
     const { name, location, type, capacityPerSlot, slotDurationMinutes, estimatedWaitMinutes, dates } = eventData;
 
@@ -139,7 +145,10 @@ export const insertEvent = async (eventData) => {
       .insert(eventDatesData)
       .select();
 
-    if (datesError) throw datesError;
+    if (datesError) {
+      await rollback(event.id);
+      throw datesError;
+    }
 
     // 時間枠定員制の場合は日付ごとの開始・終了時刻で時間枠を生成
     if (type === EVENT_TYPES.TIME_SLOT) {
@@ -177,7 +186,10 @@ export const insertEvent = async (eventData) => {
         .from('time_slots')
         .insert(timeSlotsData);
 
-      if (slotsError) throw slotsError;
+      if (slotsError) {
+        await rollback(event.id);
+        throw slotsError;
+      }
     }
 
     // 順次案内制の場合は呼び出し状態を初期化
@@ -192,7 +204,10 @@ export const insertEvent = async (eventData) => {
         .from('call_status')
         .insert(callStatusData);
 
-      if (callStatusError) throw callStatusError;
+      if (callStatusError) {
+        await rollback(event.id);
+        throw callStatusError;
+      }
     }
 
     return { data: event, error: null };

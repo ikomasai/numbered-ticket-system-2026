@@ -206,20 +206,11 @@ const CallDetailScreen = ({ route, navigation }) => {
    */
   const handleUpdateCall = async () => {
     const newNumber = parseInt(inputCallNumber, 10);
-    if (isNaN(newNumber) || newNumber <= 0) {
+    if (isNaN(newNumber) || newNumber < 1) {
       if (Platform.OS === 'web') {
         window.alert('有効な番号を入力してください');
       } else {
         Alert.alert('エラー', '有効な番号を入力してください');
-      }
-      return;
-    }
-
-    if (newNumber <= (callStatus?.current_call_number || 0)) {
-      if (Platform.OS === 'web') {
-        window.alert('現在の呼び出し番号より大きい番号を入力してください');
-      } else {
-        Alert.alert('エラー', '現在の呼び出し番号より大きい番号を入力してください');
       }
       return;
     }
