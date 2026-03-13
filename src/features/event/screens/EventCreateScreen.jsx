@@ -15,6 +15,7 @@ import {
   SafeAreaView,
   Modal,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useEvents } from '../hooks/useEvents';
@@ -25,10 +26,8 @@ import {
   SPACING,
   EVENT_TYPES,
   EVENT_TYPE_LABELS,
-  FESTIVAL_DATES,
-  EVENT_START_TIME,
-  EVENT_END_TIME,
 } from '../../../shared/constants';
+import { useSettings } from '../../../shared/contexts/SettingsContext';
 import { formatDateWithDay } from '../../../shared/utils/dateTime';
 import { toHalfWidth } from '../../../shared/utils/validation';
 
@@ -39,6 +38,7 @@ import { toHalfWidth } from '../../../shared/utils/validation';
 const EventCreateScreen = () => {
   const navigation = useNavigation();
   const { addEvent } = useEvents();
+  const { festivalDates, eventStartTime, eventEndTime, isLoading: isSettingsLoading } = useSettings();
 
   /** 企画名 */
   const [name, setName] = useState('');
@@ -87,8 +87,8 @@ const EventCreateScreen = () => {
     if (isChecked) {
       setSelectedDates([...selectedDates, {
         date,
-        startTime: EVENT_START_TIME,
-        endTime: EVENT_END_TIME,
+        startTime: eventStartTime,
+        endTime: eventEndTime,
       }]);
     } else {
       setSelectedDates(selectedDates.filter(d => d.date !== date));
@@ -275,40 +275,44 @@ const EventCreateScreen = () => {
 
           <View style={styles.datesSection}>
             <Text style={styles.datesSectionTitle}>開催日</Text>
-            {FESTIVAL_DATES.map((date) => {
-              /** この日付が選択されているか */
-              const isSelected = selectedDates.some(d => d.date === date);
-              /** 選択されている場合の日付データ */
-              const dateData = selectedDates.find(d => d.date === date);
-              return (
-                <View key={date} style={styles.dateRow}>
-                  <Checkbox
-                    label={formatDateWithDay(date)}
-                    checked={isSelected}
-                    onToggle={(checked) => handleDateToggle(date, checked)}
-                  />
-                  {isSelected && (
-                    <View style={styles.timeInputRow}>
-                      <TextInput
-                        label="開始"
-                        value={dateData.startTime}
-                        onChangeText={(val) => handleStartTimeChange(date, toHalfWidth(val))}
-                        placeholder="10:00"
-                        style={styles.timeInput}
-                      />
-                      <Text style={styles.timeSeparator}>〜</Text>
-                      <TextInput
-                        label="終了"
-                        value={dateData.endTime}
-                        onChangeText={(val) => handleEndTimeChange(date, toHalfWidth(val))}
-                        placeholder="19:00"
-                        style={styles.timeInput}
-                      />
-                    </View>
-                  )}
-                </View>
-              );
-            })}
+            {isSettingsLoading ? (
+              <ActivityIndicator size="small" color={COLORS.PRIMARY} style={{ marginVertical: SPACING.SM }} />
+            ) : (
+              festivalDates.map((date) => {
+                /** この日付が選択されているか */
+                const isSelected = selectedDates.some(d => d.date === date);
+                /** 選択されている場合の日付データ */
+                const dateData = selectedDates.find(d => d.date === date);
+                return (
+                  <View key={date} style={styles.dateRow}>
+                    <Checkbox
+                      label={formatDateWithDay(date)}
+                      checked={isSelected}
+                      onToggle={(checked) => handleDateToggle(date, checked)}
+                    />
+                    {isSelected && (
+                      <View style={styles.timeInputRow}>
+                        <TextInput
+                          label="開始"
+                          value={dateData.startTime}
+                          onChangeText={(val) => handleStartTimeChange(date, toHalfWidth(val))}
+                          placeholder="10:00"
+                          style={styles.timeInput}
+                        />
+                        <Text style={styles.timeSeparator}>〜</Text>
+                        <TextInput
+                          label="終了"
+                          value={dateData.endTime}
+                          onChangeText={(val) => handleEndTimeChange(date, toHalfWidth(val))}
+                          placeholder="19:00"
+                          style={styles.timeInput}
+                        />
+                      </View>
+                    )}
+                  </View>
+                );
+              })
+            )}
           </View>
           {errors.dates && <Text style={styles.errorText}>{errors.dates}</Text>}
 

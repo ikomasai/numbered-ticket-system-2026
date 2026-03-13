@@ -31,9 +31,9 @@ import {
   STATUS,
   STATUS_LABELS,
   STATUS_COLORS,
-  SLOT_THRESHOLDS,
   SLOT_STATUS_COLORS,
 } from '../../../shared/constants';
+import { useSettings } from '../../../shared/contexts/SettingsContext';
 import { formatDateWithDay, formatTimeSlotDisplay, calculateEstimatedWaitTime, formatWaitTime } from '../../../shared/utils/dateTime';
 import { useResponsive } from '../../../shared/hooks/useResponsive';
 
@@ -41,14 +41,15 @@ import { useResponsive } from '../../../shared/hooks/useResponsive';
  * 配布状況の割合に応じた色を取得
  * @param {number} currentCount - 現在のカウント
  * @param {number} capacity - 定員
+ * @param {Object} thresholds - 閾値オブジェクト（LOW, MEDIUM, HIGH, VERY_HIGH）
  * @returns {string} ステータスカラー
  */
-const getSlotStatusColor = (currentCount, capacity) => {
+const getSlotStatusColor = (currentCount, capacity, thresholds) => {
   const rate = (currentCount / capacity) * 100;
-  if (rate <= SLOT_THRESHOLDS.LOW) return SLOT_STATUS_COLORS.VERY_LOW;
-  if (rate <= SLOT_THRESHOLDS.MEDIUM) return SLOT_STATUS_COLORS.LOW;
-  if (rate <= SLOT_THRESHOLDS.HIGH) return SLOT_STATUS_COLORS.MEDIUM;
-  if (rate <= SLOT_THRESHOLDS.VERY_HIGH) return SLOT_STATUS_COLORS.HIGH;
+  if (rate <= thresholds.LOW) return SLOT_STATUS_COLORS.VERY_LOW;
+  if (rate <= thresholds.MEDIUM) return SLOT_STATUS_COLORS.LOW;
+  if (rate <= thresholds.HIGH) return SLOT_STATUS_COLORS.MEDIUM;
+  if (rate <= thresholds.VERY_HIGH) return SLOT_STATUS_COLORS.HIGH;
   return SLOT_STATUS_COLORS.VERY_HIGH;
 };
 
@@ -61,6 +62,7 @@ const getSlotStatusColor = (currentCount, capacity) => {
  */
 const TicketDetailScreen = ({ route, navigation }) => {
   const { isMobile } = useResponsive();
+  const { slotThresholds } = useSettings();
 
   /** ルートパラメータから企画情報を取得 */
   const { event: initialEvent } = route.params;
@@ -448,7 +450,7 @@ const TicketDetailScreen = ({ route, navigation }) => {
                         const isSlotSelected = selectedTimeSlot?.id === slot.id;
                         const isSlotActive = slot.status === STATUS.ACTIVE;
                         const isFull = slot.current_count >= event.capacity_per_slot;
-                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot);
+                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot, slotThresholds);
 
                         return (
                           <TouchableOpacity
@@ -485,7 +487,7 @@ const TicketDetailScreen = ({ route, navigation }) => {
                         const isSlotSelected = selectedTimeSlot?.id === slot.id;
                         const isSlotActive = slot.status === STATUS.ACTIVE;
                         const isFull = slot.current_count >= event.capacity_per_slot;
-                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot);
+                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot, slotThresholds);
 
                         return (
                           <TouchableOpacity

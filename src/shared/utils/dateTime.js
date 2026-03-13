@@ -3,7 +3,9 @@
  * 時間枠の生成や日付フォーマットに使用
  */
 
-import { EVENT_START_TIME, EVENT_END_TIME } from '../constants';
+/** デフォルトの開始・終了時刻（Contextから値が渡されない場合のフォールバック） */
+const DEFAULT_START_TIME = '10:00';
+const DEFAULT_END_TIME = '19:00';
 
 /**
  * 時刻文字列を分に変換
@@ -35,8 +37,8 @@ export const minutesToTime = (minutes) => {
  */
 export const generateTimeSlots = (slotDurationMinutes, startTime, endTime) => {
   const slots = [];
-  const startMinutes = timeToMinutes(startTime || EVENT_START_TIME);
-  const endMinutes = timeToMinutes(endTime || EVENT_END_TIME);
+  const startMinutes = timeToMinutes(startTime || DEFAULT_START_TIME);
+  const endMinutes = timeToMinutes(endTime || DEFAULT_END_TIME);
 
   let currentMinutes = startMinutes;
   while (currentMinutes + slotDurationMinutes <= endMinutes) {

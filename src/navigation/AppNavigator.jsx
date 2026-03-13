@@ -29,6 +29,9 @@ import CallDetailScreen from '../features/call/screens/CallDetailScreen';
 import StatusListScreen from '../features/status/screens/StatusListScreen';
 import StatusDetailScreen from '../features/status/screens/StatusDetailScreen';
 
+// デフォルト設定画面インポート
+import SettingsScreen from '../features/settings/screens/SettingsScreen';
+
 // 認証画面インポート
 import LoginScreen from '../features/auth/screens/LoginScreen';
 import { useAuth } from '../shared/contexts/AuthContext';
@@ -157,6 +160,21 @@ const StatusStack = () => (
 );
 
 /**
+ * デフォルト設定スタックナビゲーター
+ * デフォルト設定画面を管理
+ * @returns {JSX.Element} デフォルト設定スタック
+ */
+const SettingsStack = () => (
+  <Stack.Navigator
+    screenOptions={{
+      headerShown: false,
+    }}
+  >
+    <Stack.Screen name="SettingsMain" component={SettingsScreen} />
+  </Stack.Navigator>
+);
+
+/**
  * タブアイコンコンポーネント
  * @param {Object} props - プロパティ
  * @param {string} props.icon - アイコン文字
@@ -181,6 +199,8 @@ const SLIDE_MENU_WIDTH = 260;
 
 const MobileTabNavigator = () => {
   const { userName, signOut } = useAuth();
+  /** デフォルト設定画面の表示状態 */
+  const [showSettings, setShowSettings] = useState(false);
   /** ハンバーガーメニューの開閉状態 */
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   /** スライドアニメーション値（-SLIDE_MENU_WIDTH = 閉じ、0 = 開き） */
@@ -321,6 +341,16 @@ const MobileTabNavigator = () => {
         {/* メニュー下部 */}
         <View style={styles.slideMenuFooter}>
           <TouchableOpacity
+            style={styles.mobileMenuSettingsButton}
+            onPress={() => {
+              setIsMenuOpen(false);
+              setShowSettings(true);
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.mobileMenuSettingsText}>デフォルト設定</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={styles.mobileMenuLogoutButton}
             onPress={handleLogoutPress}
             activeOpacity={0.7}
@@ -329,6 +359,22 @@ const MobileTabNavigator = () => {
           </TouchableOpacity>
         </View>
       </Animated.View>
+
+      {/* デフォルト設定画面（フルスクリーン） */}
+      {showSettings && (
+        <View style={styles.settingsFullScreen}>
+          <View style={styles.settingsHeader}>
+            <TouchableOpacity
+              style={styles.settingsBackButton}
+              onPress={() => setShowSettings(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.settingsBackText}>← 戻る</Text>
+            </TouchableOpacity>
+          </View>
+          <SettingsScreen />
+        </View>
+      )}
     </View>
   );
 };
@@ -350,6 +396,7 @@ const CustomDrawerContent = (props) => {
     { name: 'TicketTab', label: '発券', icon: '券', firstScreen: 'TicketList' },
     { name: 'CallTab', label: '呼び出し', icon: '呼', firstScreen: 'CallList' },
     { name: 'StatusTab', label: '状況確認', icon: '状', firstScreen: 'StatusList' },
+    { name: 'SettingsTab', label: 'デフォルト設定', icon: '設', firstScreen: 'SettingsMain' },
   ];
 
   /**
@@ -443,6 +490,7 @@ const DesktopDrawerNavigator = () => (
     <Drawer.Screen name="TicketTab" component={TicketStack} />
     <Drawer.Screen name="CallTab" component={CallStack} />
     <Drawer.Screen name="StatusTab" component={StatusStack} />
+    <Drawer.Screen name="SettingsTab" component={SettingsStack} />
   </Drawer.Navigator>
 );
 
@@ -487,6 +535,8 @@ const AppNavigator = () => {
     StatusTab: '状況確認',
     StatusList: '状況確認',
     StatusDetail: '状況確認',
+    SettingsTab: 'デフォルト設定',
+    SettingsMain: 'デフォルト設定',
   };
 
   return (
@@ -723,6 +773,47 @@ const styles = StyleSheet.create({
   mobileMenuLogoutText: {
     fontSize: FONT_SIZES.MD,
     color: COLORS.ERROR,
+    fontWeight: '600',
+  },
+  /** モバイル設定ボタン */
+  mobileMenuSettingsButton: {
+    paddingVertical: SPACING.SM,
+    paddingHorizontal: SPACING.MD,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.PRIMARY,
+    alignItems: 'center',
+    marginBottom: SPACING.SM,
+  },
+  mobileMenuSettingsText: {
+    fontSize: FONT_SIZES.MD,
+    color: COLORS.PRIMARY,
+    fontWeight: '600',
+  },
+  /** モバイル設定フルスクリーン */
+  settingsFullScreen: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: COLORS.BACKGROUND,
+    zIndex: 30,
+  },
+  settingsHeader: {
+    backgroundColor: COLORS.CARD_BACKGROUND,
+    paddingTop: SPACING.XL,
+    paddingHorizontal: SPACING.MD,
+    paddingBottom: SPACING.SM,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.BORDER,
+  },
+  settingsBackButton: {
+    paddingVertical: SPACING.XS,
+  },
+  settingsBackText: {
+    fontSize: FONT_SIZES.LG,
+    color: COLORS.PRIMARY,
     fontWeight: '600',
   },
   /** ローディング画面 */

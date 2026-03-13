@@ -24,9 +24,9 @@ import {
   STATUS,
   STATUS_LABELS,
   STATUS_COLORS,
-  SLOT_THRESHOLDS,
   SLOT_STATUS_COLORS,
 } from '../../../shared/constants';
+import { useSettings } from '../../../shared/contexts/SettingsContext';
 import {
   formatDateWithDay,
   formatTimeSlotDisplay,
@@ -39,14 +39,15 @@ import { useResponsive } from '../../../shared/hooks/useResponsive';
  * 定員に対する現在の人数から色を取得
  * @param {number} currentCount - 現在の人数
  * @param {number} capacity - 定員
+ * @param {Object} thresholds - 閾値オブジェクト（LOW, MEDIUM, HIGH, VERY_HIGH）
  * @returns {string} 表示色
  */
-const getSlotStatusColor = (currentCount, capacity) => {
+const getSlotStatusColor = (currentCount, capacity, thresholds) => {
   const rate = (currentCount / capacity) * 100;
-  if (rate <= SLOT_THRESHOLDS.LOW) return SLOT_STATUS_COLORS.VERY_LOW;
-  if (rate <= SLOT_THRESHOLDS.MEDIUM) return SLOT_STATUS_COLORS.LOW;
-  if (rate <= SLOT_THRESHOLDS.HIGH) return SLOT_STATUS_COLORS.MEDIUM;
-  if (rate <= SLOT_THRESHOLDS.VERY_HIGH) return SLOT_STATUS_COLORS.HIGH;
+  if (rate <= thresholds.LOW) return SLOT_STATUS_COLORS.VERY_LOW;
+  if (rate <= thresholds.MEDIUM) return SLOT_STATUS_COLORS.LOW;
+  if (rate <= thresholds.HIGH) return SLOT_STATUS_COLORS.MEDIUM;
+  if (rate <= thresholds.VERY_HIGH) return SLOT_STATUS_COLORS.HIGH;
   return SLOT_STATUS_COLORS.VERY_HIGH;
 };
 
@@ -59,6 +60,7 @@ const getSlotStatusColor = (currentCount, capacity) => {
  */
 const StatusDetailScreen = ({ route, navigation }) => {
   const { isMobile } = useResponsive();
+  const { slotThresholds } = useSettings();
   /** ルートパラメータから企画情報を取得 */
   const { event: initialEvent } = route.params;
 
@@ -294,7 +296,7 @@ const StatusDetailScreen = ({ route, navigation }) => {
                     <View style={[styles.timeSlotsColumn, isMobile && styles.timeSlotsColumnMobile]}>
                       {timeSlots.slice(0, Math.ceil(timeSlots.length / 2)).map((slot) => {
                         const rate = calculateRate(slot.current_count, event.capacity_per_slot);
-                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot);
+                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot, slotThresholds);
                         return (
                           <View key={slot.id} style={styles.slotCard}>
                             <View style={styles.slotHeader}>
@@ -342,7 +344,7 @@ const StatusDetailScreen = ({ route, navigation }) => {
                     <View style={[styles.timeSlotsColumn, isMobile && styles.timeSlotsColumnMobile]}>
                       {timeSlots.slice(Math.ceil(timeSlots.length / 2)).map((slot) => {
                         const rate = calculateRate(slot.current_count, event.capacity_per_slot);
-                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot);
+                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot, slotThresholds);
                         return (
                           <View key={slot.id} style={styles.slotCard}>
                             <View style={styles.slotHeader}>
