@@ -35,6 +35,7 @@ import {
 } from '../../../shared/constants';
 import { useSettings } from '../../../shared/contexts/SettingsContext';
 import { formatDateWithDay, formatTimeSlotDisplay, calculateEstimatedWaitTime, formatWaitTime } from '../../../shared/utils/dateTime';
+import { selectTicketGroupsForCall } from '../../call/services/callService';
 import { useResponsive } from '../../../shared/hooks/useResponsive';
 
 /**
@@ -88,6 +89,8 @@ const TicketDetailScreen = ({ route, navigation }) => {
   const [quantity, setQuantity] = useState(1);
   /** 呼び出し状態（順次案内制用） */
   const [callStatus, setCallStatus] = useState(null);
+  /** 発券グループ一覧（順次案内制の待ち時間計算用） */
+  const [ticketGroups, setTicketGroups] = useState([]);
 
   /** ローディング状態 */
   const [isLoading, setIsLoading] = useState(false);
@@ -165,6 +168,15 @@ const TicketDetailScreen = ({ route, navigation }) => {
   }, [event.id]);
 
   /**
+   * 発券グループ一覧を取得（順次案内制の待ち時間計算用）
+   * @param {string} eventDateId - 企画開催日ID
+   */
+  const fetchTicketGroups = useCallback(async (eventDateId) => {
+    const { data } = await selectTicketGroupsForCall(eventDateId);
+    setTicketGroups(data || []);
+  }, []);
+
+  /**
    * 時間枠一覧を取得
    * @param {string} eventDateId - 企画開催日ID
    */
@@ -195,9 +207,10 @@ const TicketDetailScreen = ({ route, navigation }) => {
         fetchTimeSlots(firstDate.id);
       } else if (event.type === EVENT_TYPES.SEQUENTIAL) {
         fetchCallStatus(firstDate.id);
+        fetchTicketGroups(firstDate.id);
       }
     }
-  }, [eventDates, selectedDate, event.type, fetchTimeSlots, fetchCallStatus]);
+  }, [eventDates, selectedDate, event.type, fetchTimeSlots, fetchCallStatus, fetchTicketGroups]);
 
   // ヘッダータイトルを設定
   useEffect(() => {
@@ -220,9 +233,10 @@ const TicketDetailScreen = ({ route, navigation }) => {
       setTimeSlots([]);
     }
 
-    // 順次案内制の場合は呼び出し状態を取得
+    // 順次案内制の場合は呼び出し状態とグループ一覧を取得
     if (event.type === EVENT_TYPES.SEQUENTIAL) {
       fetchCallStatus(dateItem.id);
+      fetchTicketGroups(dateItem.id);
     }
   };
 
@@ -323,6 +337,7 @@ const TicketDetailScreen = ({ route, navigation }) => {
       fetchTimeSlots(selectedDate.id);
     } else if (event.type === EVENT_TYPES.SEQUENTIAL) {
       fetchCallStatus(selectedDate.id);
+      fetchTicketGroups(selectedDate.id);
     }
   };
 
@@ -549,11 +564,14 @@ const TicketDetailScreen = ({ route, navigation }) => {
                     <Text style={styles.waitTimeValue}>
                       {formatWaitTime(
                         calculateEstimatedWaitTime(
-                          selectedDate.next_ticket_number || 1,
+                          ticketGroups,
                           callStatus?.current_call_number || 0,
                           event.estimated_wait_minutes || 5
                         )
                       )}
+                    </Text>
+                    <Text style={styles.waitTimeGroupCount}>
+                      ({ticketGroups.filter(g => g.min_ticket > (callStatus?.current_call_number || 0)).length}グループ待ち)
                     </Text>
                   </View>
                 </View>
@@ -886,6 +904,11 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.MD,
     color: COLORS.TEXT_SECONDARY,
     marginBottom: SPACING.XS,
+  },
+  waitTimeGroupCount: {
+    fontSize: FONT_SIZES.SM,
+    color: COLORS.TEXT_SECONDARY,
+    marginTop: 2,
   },
   waitTimeValue: {
     fontSize: FONT_SIZES.HEADING,

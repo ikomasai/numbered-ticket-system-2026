@@ -67,10 +67,11 @@ const deriveEventTimes = (raw) => {
  * @returns {Object} SLOT_THRESHOLDS互換の閾値オブジェクト
  */
 const deriveSlotThresholds = (raw) => ({
-  LOW: parseInt(raw.slot_threshold_low, 10),
-  MEDIUM: parseInt(raw.slot_threshold_medium, 10),
-  HIGH: parseInt(raw.slot_threshold_high, 10),
-  VERY_HIGH: parseInt(raw.slot_threshold_very_high, 10),
+  /** 空欄やNaNの場合はプレースホルダと同じデフォルト値を使用 */
+  LOW: parseInt(raw.slot_threshold_low, 10) || 25,
+  MEDIUM: parseInt(raw.slot_threshold_medium, 10) || 50,
+  HIGH: parseInt(raw.slot_threshold_high, 10) || 60,
+  VERY_HIGH: parseInt(raw.slot_threshold_very_high, 10) || 80,
 });
 
 /**

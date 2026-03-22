@@ -67,7 +67,7 @@ const EventEditScreen = () => {
   const [name, setName] = useState('');
   /** 企画場所 */
   const [location, setLocation] = useState('');
-  /** 1番号あたりの推定待ち時間（分） */
+  /** 1グループあたりの推定待ち時間（分） */
   const [estimatedWaitMinutes, setEstimatedWaitMinutes] = useState('');
   /** 送信中状態 */
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -297,7 +297,7 @@ const EventEditScreen = () => {
 
               {event.type === EVENT_TYPES.SEQUENTIAL && (
                 <TextInput
-                  label="1番号あたりの推定待ち時間（分）"
+                  label="1グループあたりの推定待ち時間（分）"
                   value={estimatedWaitMinutes}
                   onChangeText={setEstimatedWaitMinutes}
                   placeholder="例：5"

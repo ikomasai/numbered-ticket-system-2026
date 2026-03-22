@@ -50,7 +50,7 @@ const EventCreateScreen = () => {
   const [capacityPerSlot, setCapacityPerSlot] = useState('');
   /** 1枠あたりの時間（分） */
   const [slotDurationMinutes, setSlotDurationMinutes] = useState('');
-  /** 1番号あたりの推定待ち時間（分） */
+  /** 1グループあたりの推定待ち時間（分） */
   const [estimatedWaitMinutes, setEstimatedWaitMinutes] = useState('');
   /** 選択された開催日（日付・開始時刻・終了時刻を含むオブジェクト配列） */
   const [selectedDates, setSelectedDates] = useState([]);
@@ -303,7 +303,7 @@ const EventCreateScreen = () => {
 
           {type === EVENT_TYPES.SEQUENTIAL && (
             <TextInput
-              label="1番号あたりの推定待ち時間（分）"
+              label="1グループあたりの推定待ち時間（分）"
               value={estimatedWaitMinutes}
               onChangeText={(val) => setEstimatedWaitMinutes(toHalfWidth(val).replace(/[^0-9]/g, ''))}
               placeholder="例：5"

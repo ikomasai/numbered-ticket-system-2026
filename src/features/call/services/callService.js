@@ -120,6 +120,45 @@ export const selectEventsForCall = async () => {
 };
 
 /**
+ * 発券グループ一覧を取得（順次案内制の呼び出し用）
+ * グループ番号ごとにまとめ、最小・最大チケット番号を返す
+ * @param {string} eventDateId - 企画開催日ID
+ * @returns {Promise<{data: Array|null, error: Error|null}>} グループ一覧
+ *   各要素: { group_number, min_ticket, max_ticket, count }
+ */
+export const selectTicketGroupsForCall = async (eventDateId) => {
+  try {
+    const { data, error } = await supabase
+      .from('tickets')
+      .select('group_number, ticket_number')
+      .eq('event_date_id', eventDateId)
+      .gt('group_number', 0)
+      .order('group_number', { ascending: true })
+      .order('ticket_number', { ascending: true });
+
+    if (error) throw error;
+
+    // group_number ごとにまとめる
+    const groupMap = new Map();
+    (data || []).forEach(ticket => {
+      const gn = ticket.group_number;
+      if (!groupMap.has(gn)) {
+        groupMap.set(gn, { group_number: gn, min_ticket: ticket.ticket_number, max_ticket: ticket.ticket_number, count: 0 });
+      }
+      const group = groupMap.get(gn);
+      group.min_ticket = Math.min(group.min_ticket, ticket.ticket_number);
+      group.max_ticket = Math.max(group.max_ticket, ticket.ticket_number);
+      group.count += 1;
+    });
+
+    return { data: Array.from(groupMap.values()), error: null };
+  } catch (error) {
+    console.error('発券グループ取得エラー:', error);
+    return { data: null, error };
+  }
+};
+
+/**
  * 時間枠一覧を取得（呼び出し用）
  * @param {string} eventDateId - 企画開催日ID
  * @returns {Promise<{data: Array|null, error: Error|null}>} 時間枠一覧
