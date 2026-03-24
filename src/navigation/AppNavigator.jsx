@@ -372,7 +372,7 @@ const MobileTabNavigator = () => {
               <Text style={styles.settingsBackText}>← 戻る</Text>
             </TouchableOpacity>
           </View>
-          <SettingsScreen />
+          <SettingsScreen onSaveSuccess={() => setShowSettings(false)} />
         </View>
       )}
     </View>

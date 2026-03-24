@@ -357,8 +357,12 @@ const CallDetailScreen = ({ route, navigation }) => {
     return () => clearTimeout(timer);
   }, [ticketGroups, callStatus, isMobile, event.type]);
 
-  /** 選択中の日付のステータスがアクティブかどうか */
-  const isDateActive = selectedDate?.status === STATUS.ACTIVE;
+  /** 選択中の日付が呼び出し可能かどうか（未発券のみ不可） */
+  const isDateCallable = selectedDate && selectedDate.status !== STATUS.NOT_STARTED;
+  /** 警告を表示するかどうか（発券中以外） */
+  const showDateWarning = selectedDate && selectedDate.status !== STATUS.ACTIVE;
+  /** 未発券かどうか（呼び出し完全不可） */
+  const isDateNotStarted = selectedDate?.status === STATUS.NOT_STARTED;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -383,21 +387,23 @@ const CallDetailScreen = ({ route, navigation }) => {
             <Text style={styles.eventLocation}>{event.location}</Text>
           </View>
 
-          {/* 非アクティブ警告 */}
-          {selectedDate && !isDateActive && (
+          {/* ステータス警告 */}
+          {showDateWarning && (
             <View style={[styles.warningContainer, styles.mobileSeqWarning]}>
               <Text style={styles.warningText}>
-                この日は現在{STATUS_LABELS[selectedDate.status]}のため呼び出しできません
+                {isDateNotStarted
+                  ? `⚠️ この日は未発券のため呼び出しできません`
+                  : `⚠️ この日は現在${STATUS_LABELS[selectedDate.status]}です。呼び出しは可能です`}
               </Text>
             </View>
           )}
 
           {/* グループリスト（flex:1でスクロール可能な中央エリア） */}
           <View style={styles.mobileGroupArea}>
-            {isDateActive && selectedDate && (
+            {isDateCallable && selectedDate && (
               <Text style={styles.sectionTitle}>グループを選択して呼び出し</Text>
             )}
-            {isDateActive && selectedDate && (
+            {isDateCallable && selectedDate && (
               isLoading ? (
                 <ActivityIndicator size="small" color={COLORS.PRIMARY} />
               ) : ticketGroups.length > 0 ? (
@@ -471,7 +477,7 @@ const CallDetailScreen = ({ route, navigation }) => {
           </View>
 
           {/* 下部固定バー：現在の呼び出し番号＋選択グループプレビュー＋ボタン */}
-          {isDateActive && selectedDate && (
+          {isDateCallable && selectedDate && (
             <View style={styles.mobileBottomBar}>
               {/* 現在の呼び出し番号（PC版のcurrentCallBoxと同スタイル） */}
               <View style={styles.currentCallBox}>
@@ -540,17 +546,19 @@ const CallDetailScreen = ({ route, navigation }) => {
                 </View>
               )}
 
-              {/* ステータスが発券中でない場合の警告 */}
-              {selectedDate && !isDateActive && (
+              {/* ステータス警告 */}
+              {showDateWarning && (
                 <View style={styles.warningContainer}>
                   <Text style={styles.warningText}>
-                    この日は現在{STATUS_LABELS[selectedDate.status]}のため呼び出しできません
+                    {isDateNotStarted
+                      ? `⚠️ この日は未発券のため呼び出しできません`
+                      : `⚠️ この日は現在${STATUS_LABELS[selectedDate.status]}です。呼び出しは可能です`}
                   </Text>
                 </View>
               )}
 
               {/* 操作パネル（時間枠定員制） */}
-              {event.type === EVENT_TYPES.TIME_SLOT && isDateActive && (
+              {event.type === EVENT_TYPES.TIME_SLOT && isDateCallable && (
                 <View style={styles.operationPanel}>
                   <Button
                     title="呼び出し"
@@ -562,7 +570,7 @@ const CallDetailScreen = ({ route, navigation }) => {
               )}
 
               {/* 操作パネル（順次案内制・デスクトップ） */}
-              {event.type === EVENT_TYPES.SEQUENTIAL && isDateActive && selectedDate && (
+              {event.type === EVENT_TYPES.SEQUENTIAL && isDateCallable && selectedDate && (
                 <View style={styles.operationPanel}>
                   {/* 現在の呼び出し番号 */}
                   <View style={styles.currentCallBox}>
@@ -603,7 +611,7 @@ const CallDetailScreen = ({ route, navigation }) => {
             {/* 右側：時間枠選択または順次案内制のグループリスト */}
             <View style={[styles.rightPanel, isMobile && styles.panelMobile]}>
               {/* 時間枠定員制の場合 */}
-              {event.type === EVENT_TYPES.TIME_SLOT && isDateActive && (
+              {event.type === EVENT_TYPES.TIME_SLOT && isDateCallable && (
                 <View style={[styles.timeSlotsContainer, isMobile && styles.timeSlotsContainerMobile]}>
                   <Text style={styles.sectionTitle}>時間枠を選択して呼び出し</Text>
                   {isLoading ? (
@@ -666,7 +674,7 @@ const CallDetailScreen = ({ route, navigation }) => {
               )}
 
               {/* 順次案内制の場合：グループリスト（デスクトップ） */}
-              {event.type === EVENT_TYPES.SEQUENTIAL && isDateActive && selectedDate && (
+              {event.type === EVENT_TYPES.SEQUENTIAL && isDateCallable && selectedDate && (
                 <View style={styles.groupListContainer}>
                   <Text style={styles.sectionTitle}>グループを選択して呼び出し</Text>
                   {isLoading ? (

@@ -11,6 +11,8 @@ import {
   StyleSheet,
   Platform,
   ActivityIndicator,
+  Modal,
+  TouchableOpacity,
 } from 'react-native';
 import { useSettings } from '../../../shared/contexts/SettingsContext';
 import { Button, TextInput, RadioGroup } from '../../../shared/components';
@@ -33,8 +35,13 @@ const filterNumeric = (text) => {
  * デフォルト設定画面コンポーネント
  * @returns {JSX.Element} 設定画面
  */
-const SettingsScreen = () => {
-  const { rawSettings, isLoading, saveSettings, fetchSettings } = useSettings();
+/**
+ * @param {Object} props
+ * @param {Object} [props.navigation] - Stack.Screenから渡されるナビゲーションオブジェクト
+ * @param {Function} [props.onSaveSuccess] - 保存完了後に呼ぶコールバック（モバイルオーバーレイ用）
+ */
+const SettingsScreen = ({ navigation, onSaveSuccess }) => {
+  const { rawSettings, isLoading, saveSettings } = useSettings();
   const { isMobile } = useResponsive();
 
   /** 企画年モード（auto / manual） */
@@ -69,8 +76,8 @@ const SettingsScreen = () => {
   const [isSaving, setIsSaving] = useState(false);
   /** バリデーションエラー */
   const [errors, setErrors] = useState({});
-  /** 保存成功メッセージ表示フラグ */
-  const [showSuccess, setShowSuccess] = useState(false);
+  /** 保存完了モーダルの表示フラグ */
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   /**
    * DB設定値をローカルstateに反映
@@ -145,6 +152,20 @@ const SettingsScreen = () => {
     const eMinErr = validateRange(endMinute, 0, 59);
     if (eMinErr) newErrors.endMinute = eMinErr;
 
+    /** 終了時間 > 開始時間チェック（個別エラーがない場合のみ） */
+    if (!sHourErr && !sMinErr && !eHourErr && !eMinErr) {
+      /** 空欄はDB値（またはデフォルト0）で補完して比較 */
+      const sH = parseInt(startHour || rawSettings?.event_start_hour || '0', 10);
+      const sM = parseInt(startMinute || rawSettings?.event_start_minute || '0', 10);
+      const eH = parseInt(endHour || rawSettings?.event_end_hour || '0', 10);
+      const eM = parseInt(endMinute || rawSettings?.event_end_minute || '0', 10);
+      if (!isNaN(sH) && !isNaN(sM) && !isNaN(eH) && !isNaN(eM)) {
+        if (eH * 60 + eM <= sH * 60 + sM) {
+          newErrors.timeOrder = '終了時間は開始時間より後にしてください';
+        }
+      }
+    }
+
     /** 閾値項目（入力がある場合のみ） */
     const tLowErr = validateRange(thresholdLow, 0, 100);
     if (tLowErr) newErrors.thresholdLow = tLowErr;
@@ -217,20 +238,16 @@ const SettingsScreen = () => {
     const settingsMap = getChangedSettings();
 
     if (Object.keys(settingsMap).length === 0) {
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
+      setShowSuccessModal(true);
       return;
     }
 
     setIsSaving(true);
-    setShowSuccess(false);
 
     const { success, error } = await saveSettings(settingsMap);
 
     if (success) {
-      setShowSuccess(true);
-      /** 3秒後に成功メッセージを非表示 */
-      setTimeout(() => setShowSuccess(false), 3000);
+      setShowSuccessModal(true);
     } else {
       if (Platform.OS === 'web') {
         window.alert(`保存に失敗しました: ${error?.message || '不明なエラー'}`);
@@ -238,6 +255,20 @@ const SettingsScreen = () => {
     }
 
     setIsSaving(false);
+  };
+
+  /**
+   * 保存完了モーダルを閉じる
+   * モバイル: onSaveSuccessコールバックを呼ぶ（設定パネルを閉じる）
+   * デスクトップ: 企画管理タブへ遷移
+   */
+  const handleSuccessClose = () => {
+    setShowSuccessModal(false);
+    if (onSaveSuccess) {
+      onSaveSuccess();
+    } else if (navigation) {
+      navigation.navigate('EventTab');
+    }
   };
 
   /** 企画年モードの選択肢 */
@@ -403,6 +434,9 @@ const SettingsScreen = () => {
             </View>
           </View>
         </View>
+        {errors.timeOrder && (
+          <Text style={styles.errorText}>{errors.timeOrder}</Text>
+        )}
       </View>
 
       {/* 閾値設定 */}
@@ -476,11 +510,26 @@ const SettingsScreen = () => {
         )}
       </View>
 
+      {/* 保存完了モーダル */}
+      <Modal
+        visible={showSuccessModal}
+        transparent
+        animationType="fade"
+        onRequestClose={handleSuccessClose}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.successModal}>
+            <Text style={styles.successModalTitle}>保存しました</Text>
+            <Text style={styles.successModalMessage}>設定が正常に保存されました。</Text>
+            <TouchableOpacity style={styles.successModalButton} onPress={handleSuccessClose}>
+              <Text style={styles.successModalButtonText}>閉じる</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* 保存ボタン */}
       <View style={styles.buttonSection}>
-        {showSuccess && (
-          <Text style={styles.successText}>設定を保存しました</Text>
-        )}
         <Button
           title={isSaving ? '保存中...' : '設定を保存'}
           onPress={handleSave}
@@ -620,6 +669,48 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
     marginBottom: SPACING.SM,
+  },
+  /** 保存完了モーダル */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  successModal: {
+    backgroundColor: COLORS.CARD_BACKGROUND,
+    borderRadius: 16,
+    padding: SPACING.LG,
+    width: 300,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  successModalTitle: {
+    fontSize: FONT_SIZES.XL,
+    fontWeight: 'bold',
+    color: COLORS.SUCCESS,
+    marginBottom: SPACING.SM,
+  },
+  successModalMessage: {
+    fontSize: FONT_SIZES.MD,
+    color: COLORS.TEXT_SECONDARY,
+    textAlign: 'center',
+    marginBottom: SPACING.LG,
+  },
+  successModalButton: {
+    backgroundColor: COLORS.PRIMARY,
+    paddingVertical: SPACING.SM,
+    paddingHorizontal: SPACING.XL,
+    borderRadius: 8,
+  },
+  successModalButtonText: {
+    fontSize: FONT_SIZES.MD,
+    fontWeight: '600',
+    color: COLORS.CARD_BACKGROUND,
   },
   /** ローディング */
   loadingContainer: {
