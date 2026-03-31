@@ -373,14 +373,14 @@ const CallDetailScreen = ({ route, navigation }) => {
         onSelectDate={handleSelectDate}
       />
 
-      {/* スマホ×順次案内制：専用レイアウト（グループリスト中央固定＋下部ボタン） */}
-      {isMobile && event.type === EVENT_TYPES.SEQUENTIAL ? (
+      {/* スマホ：専用レイアウト（リスト中央固定＋下部ボタン） */}
+      {isMobile ? (
         <View style={styles.mobileSeqContainer}>
-          {/* 企画情報（企画名＋順次案内制バッジ＋場所） */}
+          {/* 企画情報（企画名＋バッジ＋場所） */}
           <View style={[styles.eventInfo, styles.mobileSeqEventInfo]}>
             <View style={styles.eventHeader}>
               <Text style={styles.eventName}>{event.name}</Text>
-              <View style={[styles.typeBadge, { backgroundColor: COLORS.SECONDARY }]}>
+              <View style={[styles.typeBadge, { backgroundColor: event.type === EVENT_TYPES.TIME_SLOT ? COLORS.PRIMARY : COLORS.SECONDARY }]}>
                 <Text style={styles.typeBadgeText}>{EVENT_TYPE_LABELS[event.type]}</Text>
               </View>
             </View>
@@ -398,124 +398,175 @@ const CallDetailScreen = ({ route, navigation }) => {
             </View>
           )}
 
-          {/* グループリスト（flex:1でスクロール可能な中央エリア） */}
-          <View style={styles.mobileGroupArea}>
-            {isDateCallable && selectedDate && (
-              <Text style={styles.sectionTitle}>グループを選択して呼び出し</Text>
-            )}
-            {isDateCallable && selectedDate && (
-              isLoading ? (
-                <ActivityIndicator size="small" color={COLORS.PRIMARY} />
-              ) : ticketGroups.length > 0 ? (
-                <FlatList
-                  ref={mobileGroupListRef}
-                  data={ticketGroups}
-                  keyExtractor={(group) => String(group.group_number)}
-                  style={styles.mobileGroupScroll}
-                  contentContainerStyle={styles.mobileGroupScrollContent}
-                  /** scrollToIndexに必要な固定レイアウト情報 */
-                  getItemLayout={(_, index) => ({
-                    length: GROUP_ITEM_HEIGHT,
-                    offset: GROUP_ITEM_HEIGHT * index,
-                    index,
-                  })}
-                  onScrollToIndexFailed={(info) => {
-                    /** フォールバック：近似オフセットでスクロール */
-                    mobileGroupListRef.current?.scrollToOffset({
-                      offset: info.averageItemLength * info.index,
-                      animated: false,
-                    });
-                  }}
-                  renderItem={({ item: group }) => {
-                    /** このグループが呼び出し済みかどうか */
-                    const called = isGroupCalled(group);
-                    /** このグループが選択中かどうか */
-                    const isSelected = selectedGroup?.group_number === group.group_number;
-                    /** チケット番号の表示文字列 */
-                    const ticketLabel = group.min_ticket === group.max_ticket
-                      ? `No. ${group.min_ticket}`
-                      : `No. ${group.min_ticket} 〜 ${group.max_ticket}`;
+          {/* 順次案内制: グループリスト中央＋下部バー */}
+          {event.type === EVENT_TYPES.SEQUENTIAL && (
+            <>
+              <View style={styles.mobileGroupArea}>
+                {isDateCallable && selectedDate && (
+                  <Text style={styles.sectionTitle}>グループを選択して呼び出し</Text>
+                )}
+                {isDateCallable && selectedDate && (
+                  isLoading ? (
+                    <ActivityIndicator size="small" color={COLORS.PRIMARY} />
+                  ) : ticketGroups.length > 0 ? (
+                    <FlatList
+                      ref={mobileGroupListRef}
+                      data={ticketGroups}
+                      keyExtractor={(group) => String(group.group_number)}
+                      style={styles.mobileGroupScroll}
+                      contentContainerStyle={styles.mobileGroupScrollContent}
+                      /** scrollToIndexに必要な固定レイアウト情報 */
+                      getItemLayout={(_, index) => ({
+                        length: GROUP_ITEM_HEIGHT,
+                        offset: GROUP_ITEM_HEIGHT * index,
+                        index,
+                      })}
+                      onScrollToIndexFailed={(info) => {
+                        /** フォールバック：近似オフセットでスクロール */
+                        mobileGroupListRef.current?.scrollToOffset({
+                          offset: info.averageItemLength * info.index,
+                          animated: false,
+                        });
+                      }}
+                      renderItem={({ item: group }) => {
+                        /** このグループが呼び出し済みかどうか */
+                        const called = isGroupCalled(group);
+                        /** このグループが選択中かどうか */
+                        const isSelected = selectedGroup?.group_number === group.group_number;
+                        /** チケット番号の表示文字列 */
+                        const ticketLabel = group.min_ticket === group.max_ticket
+                          ? `No. ${group.min_ticket}`
+                          : `No. ${group.min_ticket} 〜 ${group.max_ticket}`;
 
-                    return (
-                      <TouchableOpacity
-                        style={[
-                          styles.groupItem,
-                          called && styles.groupItemCalled,
-                          isSelected && styles.groupItemSelected,
-                          isSelected && called && styles.groupItemSelectedCorrection,
-                        ]}
-                        onPress={() => handleSelectGroup(group)}
-                      >
-                        <View style={styles.groupItemLeft}>
-                          {called && (
-                            <Text style={[styles.calledBadge, isSelected && styles.calledBadgeSelected]}>呼び出し済み</Text>
-                          )}
-                          {called && (
-                            <Text style={[styles.groupCheckmark, isSelected && styles.groupCheckmarkSelected]}>✓</Text>
-                          )}
-                          <Text style={[
-                            styles.groupTicketLabel,
-                            called && styles.groupTicketLabelCalled,
-                            isSelected && styles.groupTicketLabelSelected,
-                          ]}>
-                            {ticketLabel}
-                          </Text>
-                        </View>
-                        {called && (
-                          <Text style={[styles.calledHint, isSelected && styles.calledHintSelected]}>
-                            タップで訂正
-                          </Text>
-                        )}
-                      </TouchableOpacity>
-                    );
-                  }}
-                />
-              ) : (
-                <Text style={styles.noSlotsText}>まだ発券されていません</Text>
-              )
-            )}
-          </View>
-
-          {/* 下部固定バー：現在の呼び出し番号＋選択グループプレビュー＋ボタン */}
-          {isDateCallable && selectedDate && (
-            <View style={styles.mobileBottomBar}>
-              {/* 現在の呼び出し番号（PC版のcurrentCallBoxと同スタイル） */}
-              <View style={styles.currentCallBox}>
-                <Text style={styles.currentCallLabel}>現在の呼び出し番号</Text>
-                <Text style={styles.currentCallValue}>
-                  {callStatus?.current_call_number || 0}
-                </Text>
+                        return (
+                          <TouchableOpacity
+                            style={[
+                              styles.groupItem,
+                              called && styles.groupItemCalled,
+                              isSelected && styles.groupItemSelected,
+                              isSelected && called && styles.groupItemSelectedCorrection,
+                            ]}
+                            onPress={() => handleSelectGroup(group)}
+                          >
+                            <View style={styles.groupItemLeft}>
+                              {called && (
+                                <Text style={[styles.calledBadge, isSelected && styles.calledBadgeSelected]}>呼び出し済み</Text>
+                              )}
+                              {called && (
+                                <Text style={[styles.groupCheckmark, isSelected && styles.groupCheckmarkSelected]}>✓</Text>
+                              )}
+                              <Text style={[
+                                styles.groupTicketLabel,
+                                called && styles.groupTicketLabelCalled,
+                                isSelected && styles.groupTicketLabelSelected,
+                              ]}>
+                                {ticketLabel}
+                              </Text>
+                            </View>
+                            {called && (
+                              <Text style={[styles.calledHint, isSelected && styles.calledHintSelected]}>
+                                タップで訂正
+                              </Text>
+                            )}
+                          </TouchableOpacity>
+                        );
+                      }}
+                    />
+                  ) : (
+                    <Text style={styles.noSlotsText}>まだ発券されていません</Text>
+                  )
+                )}
               </View>
 
-              {/* 選択グループのプレビュー */}
-              {selectedGroup && (
-                <View style={[
-                  styles.selectedGroupPreview,
-                  isCorrectingCall && styles.selectedGroupPreviewCorrection,
-                ]}>
-                  {isCorrectingCall ? (
-                    <Text style={styles.correctionLabel}>呼び出し訂正中</Text>
-                  ) : (
-                    <>
-                      <Text style={styles.newCallCountLabel}>呼び出し合計人数</Text>
-                      <Text style={styles.newCallCountValue}>{calcNewCallCount()}</Text>
-                    </>
+              {/* 下部固定バー：現在の呼び出し番号＋選択グループプレビュー＋ボタン */}
+              {isDateCallable && selectedDate && (
+                <View style={styles.mobileBottomBar}>
+                  <View style={styles.currentCallBox}>
+                    <Text style={styles.currentCallLabel}>現在の呼び出し番号</Text>
+                    <Text style={styles.currentCallValue}>
+                      {callStatus?.current_call_number || 0}
+                    </Text>
+                  </View>
+                  {selectedGroup && (
+                    <View style={[
+                      styles.selectedGroupPreview,
+                      isCorrectingCall && styles.selectedGroupPreviewCorrection,
+                    ]}>
+                      {isCorrectingCall ? (
+                        <Text style={styles.correctionLabel}>呼び出し訂正中</Text>
+                      ) : (
+                        <>
+                          <Text style={styles.newCallCountLabel}>呼び出し合計人数</Text>
+                          <Text style={styles.newCallCountValue}>{calcNewCallCount()}</Text>
+                        </>
+                      )}
+                    </View>
                   )}
+                  <Button
+                    title="呼び出し"
+                    onPress={handleUpdateCall}
+                    disabled={!selectedGroup}
+                    isLoading={isUpdating}
+                    style={styles.callButton}
+                  />
                 </View>
               )}
+            </>
+          )}
 
-              <Button
-                title="呼び出し"
-                onPress={handleUpdateCall}
-                disabled={!selectedGroup}
-                isLoading={isUpdating}
-                style={styles.callButton}
-              />
-            </View>
+          {/* 時間枠定員制: 時間枠リスト中央＋下部バー */}
+          {event.type === EVENT_TYPES.TIME_SLOT && (
+            <>
+              <ScrollView style={styles.mobileGroupArea} contentContainerStyle={styles.mobileGroupScrollContent}>
+                {isDateCallable && selectedDate && (
+                  <Text style={styles.sectionTitle}>時間枠を選択して呼び出し</Text>
+                )}
+                {isDateCallable && selectedDate && (
+                  isLoading ? (
+                    <ActivityIndicator size="small" color={COLORS.PRIMARY} />
+                  ) : timeSlots.length > 0 ? (
+                    timeSlots.map(slot => {
+                      const isSlotSelected = selectedTimeSlot?.id === slot.id;
+                      return (
+                        <TouchableOpacity
+                          key={slot.id}
+                          style={[
+                            styles.timeSlotItem,
+                            isSlotSelected && styles.timeSlotItemSelected,
+                          ]}
+                          onPress={() => setSelectedTimeSlot(slot)}
+                        >
+                          <Text style={styles.timeSlotTime}>
+                            {formatTimeSlotDisplay(slot.start_time, slot.end_time)}
+                          </Text>
+                          <Text style={styles.timeSlotCount}>
+                            {slot.current_count}/{event.capacity_per_slot}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })
+                  ) : (
+                    <Text style={styles.noSlotsText}>時間枠が設定されていません</Text>
+                  )
+                )}
+              </ScrollView>
+
+              {/* 下部固定バー：呼び出しボタン */}
+              {isDateCallable && selectedDate && (
+                <View style={styles.mobileBottomBar}>
+                  <Button
+                    title="呼び出し"
+                    onPress={handleCallTimeSlot}
+                    disabled={!selectedTimeSlot}
+                    style={styles.callButton}
+                  />
+                </View>
+              )}
+            </>
           )}
         </View>
       ) : (
-        /* デスクトップ／時間枠定員制：既存の左右パネルレイアウト */
+        /* デスクトップ：既存の左右パネルレイアウト */
         <View style={styles.content}>
           <View style={[styles.mainRow, isMobile && styles.mainRowMobile]}>
             {/* 左側：企画情報・日付・操作パネル */}
@@ -617,6 +668,7 @@ const CallDetailScreen = ({ route, navigation }) => {
                   {isLoading ? (
                     <ActivityIndicator size="small" color={COLORS.PRIMARY} />
                   ) : timeSlots.length > 0 ? (
+                    <ScrollView style={styles.timeSlotsScroll}>
                     <View style={[styles.timeSlotsGrid, isMobile && styles.timeSlotsGridMobile]}>
                       {/* 左列 */}
                       <View style={[styles.timeSlotsColumn, isMobile && styles.timeSlotsColumnMobile]}>
@@ -667,6 +719,7 @@ const CallDetailScreen = ({ route, navigation }) => {
                         })}
                       </View>
                     </View>
+                    </ScrollView>
                   ) : (
                     <Text style={styles.noSlotsText}>時間枠が設定されていません</Text>
                   )}
@@ -902,6 +955,10 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     flexBasis: 'auto',
   },
+  /** 時間枠リストのスクロールエリア */
+  timeSlotsScroll: {
+    flex: 1,
+  },
   operationPanel: {
     backgroundColor: COLORS.CARD_BACKGROUND,
     padding: SPACING.MD,
@@ -1124,7 +1181,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.CARD_BACKGROUND,
     padding: SPACING.MD,
     borderTopWidth: 1,
-    borderTopColor: COLORS.BORDER || '#E0E0E0',
+    borderTopColor: '#E0E0E0',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
   },
   fullScreenContainer: {
     flex: 1,

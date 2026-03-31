@@ -53,6 +53,7 @@ const RadioButton = ({
  * @param {Array<{label: string, value: string, description?: string}>} props.options - 選択肢の配列
  * @param {string} props.value - 選択値
  * @param {Function} props.onValueChange - 値変更時のコールバック
+ * @param {boolean} [props.horizontal=false] - 選択肢を横並びにする
  * @param {Object} props.style - 追加スタイル
  * @returns {JSX.Element} ラジオボタングループコンポーネント
  */
@@ -61,12 +62,13 @@ export const RadioGroup = ({
   options,
   value,
   onValueChange,
+  horizontal = false,
   style,
 }) => {
   return (
     <View style={[styles.groupContainer, style]}>
       {label ? <Text style={styles.groupLabel}>{label}</Text> : null}
-      <View style={styles.optionsContainer}>
+      <View style={[styles.optionsContainer, horizontal && styles.optionsContainerHorizontal]}>
         {options.map((option) => (
           <View key={option.value} style={styles.optionWrapper}>
             <RadioButton
@@ -88,14 +90,14 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: SPACING.XS,
+    paddingVertical: 2,
   },
   radio: {
-    width: 24,
-    height: 24,
+    width: 22,
+    height: 22,
     borderWidth: 2,
     borderColor: COLORS.BORDER,
-    borderRadius: 12,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: COLORS.CARD_BACKGROUND,
@@ -108,39 +110,45 @@ const styles = StyleSheet.create({
     borderColor: COLORS.DISABLED,
   },
   radioDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: COLORS.PRIMARY,
   },
   label: {
-    marginLeft: SPACING.SM,
-    fontSize: FONT_SIZES.LG,
+    marginLeft: SPACING.XS,
+    fontSize: FONT_SIZES.MD,
     color: COLORS.TEXT,
   },
   labelDisabled: {
     color: COLORS.TEXT_SECONDARY,
   },
   groupContainer: {
-    marginBottom: SPACING.MD,
+    marginBottom: SPACING.SM,
   },
   groupLabel: {
     fontSize: FONT_SIZES.MD,
     fontWeight: '600',
     color: COLORS.TEXT,
-    marginBottom: SPACING.SM,
+    marginBottom: SPACING.XS,
   },
   optionsContainer: {
-    gap: SPACING.SM,
+    gap: SPACING.XS,
+  },
+  /** 横並びオプション */
+  optionsContainerHorizontal: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.MD,
   },
   optionWrapper: {
-    marginBottom: SPACING.SM,
+    marginBottom: 0,
   },
   description: {
-    marginLeft: 32,
-    fontSize: FONT_SIZES.SM,
+    marginLeft: 28,
+    fontSize: FONT_SIZES.XS,
     color: COLORS.TEXT_SECONDARY,
-    marginTop: SPACING.XS,
+    marginTop: 2,
   },
 });
 
