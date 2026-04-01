@@ -24,29 +24,31 @@ import {
   STATUS,
   STATUS_LABELS,
   STATUS_COLORS,
-  SLOT_THRESHOLDS,
   SLOT_STATUS_COLORS,
 } from '../../../shared/constants';
+import { useSettings } from '../../../shared/contexts/SettingsContext';
 import {
   formatDateWithDay,
   formatTimeSlotDisplay,
   calculateEstimatedWaitTime,
   formatWaitTime,
 } from '../../../shared/utils/dateTime';
+import { selectTicketGroupsForCall } from '../../call/services/callService';
 import { useResponsive } from '../../../shared/hooks/useResponsive';
 
 /**
  * 定員に対する現在の人数から色を取得
  * @param {number} currentCount - 現在の人数
  * @param {number} capacity - 定員
+ * @param {Object} thresholds - 閾値オブジェクト（LOW, MEDIUM, HIGH, VERY_HIGH）
  * @returns {string} 表示色
  */
-const getSlotStatusColor = (currentCount, capacity) => {
+const getSlotStatusColor = (currentCount, capacity, thresholds) => {
   const rate = (currentCount / capacity) * 100;
-  if (rate <= SLOT_THRESHOLDS.LOW) return SLOT_STATUS_COLORS.VERY_LOW;
-  if (rate <= SLOT_THRESHOLDS.MEDIUM) return SLOT_STATUS_COLORS.LOW;
-  if (rate <= SLOT_THRESHOLDS.HIGH) return SLOT_STATUS_COLORS.MEDIUM;
-  if (rate <= SLOT_THRESHOLDS.VERY_HIGH) return SLOT_STATUS_COLORS.HIGH;
+  if (rate <= thresholds.LOW) return SLOT_STATUS_COLORS.VERY_LOW;
+  if (rate <= thresholds.MEDIUM) return SLOT_STATUS_COLORS.LOW;
+  if (rate <= thresholds.HIGH) return SLOT_STATUS_COLORS.MEDIUM;
+  if (rate <= thresholds.VERY_HIGH) return SLOT_STATUS_COLORS.HIGH;
   return SLOT_STATUS_COLORS.VERY_HIGH;
 };
 
@@ -59,6 +61,7 @@ const getSlotStatusColor = (currentCount, capacity) => {
  */
 const StatusDetailScreen = ({ route, navigation }) => {
   const { isMobile } = useResponsive();
+  const { slotThresholds } = useSettings();
   /** ルートパラメータから企画情報を取得 */
   const { event: initialEvent } = route.params;
 
@@ -77,6 +80,8 @@ const StatusDetailScreen = ({ route, navigation }) => {
   const [timeSlots, setTimeSlots] = useState([]);
   /** 呼び出し状態 */
   const [callStatus, setCallStatus] = useState(null);
+  /** 発券グループ一覧（待ち時間計算用） */
+  const [ticketGroups, setTicketGroups] = useState([]);
 
   /** ローディング状態 */
   const [isLoading, setIsLoading] = useState(false);
@@ -167,6 +172,15 @@ const StatusDetailScreen = ({ route, navigation }) => {
   }, [event.id]);
 
   /**
+   * 発券グループ一覧を取得（待ち時間計算用）
+   * @param {string} eventDateId - 企画開催日ID
+   */
+  const fetchTicketGroups = useCallback(async (eventDateId) => {
+    const { data } = await selectTicketGroupsForCall(eventDateId);
+    setTicketGroups(data || []);
+  }, []);
+
+  /**
    * データを更新
    */
   const refreshData = useCallback(async () => {
@@ -178,11 +192,12 @@ const StatusDetailScreen = ({ route, navigation }) => {
         await fetchTimeSlots(selectedDate.id);
       } else {
         await fetchCallStatus(selectedDate.id);
+        await fetchTicketGroups(selectedDate.id);
       }
     }
 
     setIsRefreshing(false);
-  }, [fetchEventData, fetchTimeSlots, fetchCallStatus, selectedDate, event.type]);
+  }, [fetchEventData, fetchTimeSlots, fetchCallStatus, fetchTicketGroups, selectedDate, event.type]);
 
   // 初回レンダリング時に最初の日付を選択
   useEffect(() => {
@@ -194,9 +209,10 @@ const StatusDetailScreen = ({ route, navigation }) => {
         fetchTimeSlots(firstDate.id);
       } else {
         fetchCallStatus(firstDate.id);
+        fetchTicketGroups(firstDate.id);
       }
     }
-  }, [eventDates, selectedDate, event.type, fetchTimeSlots, fetchCallStatus]);
+  }, [eventDates, selectedDate, event.type, fetchTimeSlots, fetchCallStatus, fetchTicketGroups]);
 
   // ヘッダータイトルを設定
   useEffect(() => {
@@ -218,6 +234,7 @@ const StatusDetailScreen = ({ route, navigation }) => {
     } else {
       setTimeSlots([]);
       fetchCallStatus(dateItem.id);
+      fetchTicketGroups(dateItem.id);
     }
   };
 
@@ -294,7 +311,7 @@ const StatusDetailScreen = ({ route, navigation }) => {
                     <View style={[styles.timeSlotsColumn, isMobile && styles.timeSlotsColumnMobile]}>
                       {timeSlots.slice(0, Math.ceil(timeSlots.length / 2)).map((slot) => {
                         const rate = calculateRate(slot.current_count, event.capacity_per_slot);
-                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot);
+                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot, slotThresholds);
                         return (
                           <View key={slot.id} style={styles.slotCard}>
                             <View style={styles.slotHeader}>
@@ -342,7 +359,7 @@ const StatusDetailScreen = ({ route, navigation }) => {
                     <View style={[styles.timeSlotsColumn, isMobile && styles.timeSlotsColumnMobile]}>
                       {timeSlots.slice(Math.ceil(timeSlots.length / 2)).map((slot) => {
                         const rate = calculateRate(slot.current_count, event.capacity_per_slot);
-                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot);
+                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot, slotThresholds);
                         return (
                           <View key={slot.id} style={styles.slotCard}>
                             <View style={styles.slotHeader}>
@@ -415,11 +432,14 @@ const StatusDetailScreen = ({ route, navigation }) => {
                     <Text style={styles.waitTimeValue}>
                       {formatWaitTime(
                         calculateEstimatedWaitTime(
-                          selectedDate.next_ticket_number || 1,
+                          ticketGroups,
                           callStatus?.current_call_number || 0,
                           event.estimated_wait_minutes || 5
                         )
                       )}
+                    </Text>
+                    <Text style={styles.waitTimeGroupCount}>
+                      ({ticketGroups.filter(g => g.min_ticket > (callStatus?.current_call_number || 0)).length}グループ待ち)
                     </Text>
                   </View>
                 </View>
@@ -652,6 +672,11 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.MD,
     color: COLORS.TEXT_SECONDARY,
     marginBottom: SPACING.XS,
+  },
+  waitTimeGroupCount: {
+    fontSize: FONT_SIZES.SM,
+    color: COLORS.TEXT_SECONDARY,
+    marginTop: 2,
   },
   waitTimeValue: {
     fontSize: FONT_SIZES.HEADING,

@@ -15,6 +15,7 @@ import {
   SafeAreaView,
   Modal,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useEvents } from '../hooks/useEvents';
@@ -25,10 +26,8 @@ import {
   SPACING,
   EVENT_TYPES,
   EVENT_TYPE_LABELS,
-  FESTIVAL_DATES,
-  EVENT_START_TIME,
-  EVENT_END_TIME,
 } from '../../../shared/constants';
+import { useSettings } from '../../../shared/contexts/SettingsContext';
 import { formatDateWithDay } from '../../../shared/utils/dateTime';
 import { toHalfWidth } from '../../../shared/utils/validation';
 
@@ -39,6 +38,7 @@ import { toHalfWidth } from '../../../shared/utils/validation';
 const EventCreateScreen = () => {
   const navigation = useNavigation();
   const { addEvent } = useEvents();
+  const { festivalDates, eventStartTime, eventEndTime, isLoading: isSettingsLoading } = useSettings();
 
   /** 企画名 */
   const [name, setName] = useState('');
@@ -50,7 +50,7 @@ const EventCreateScreen = () => {
   const [capacityPerSlot, setCapacityPerSlot] = useState('');
   /** 1枠あたりの時間（分） */
   const [slotDurationMinutes, setSlotDurationMinutes] = useState('');
-  /** 1番号あたりの推定待ち時間（分） */
+  /** 1グループあたりの推定待ち時間（分） */
   const [estimatedWaitMinutes, setEstimatedWaitMinutes] = useState('');
   /** 選択された開催日（日付・開始時刻・終了時刻を含むオブジェクト配列） */
   const [selectedDates, setSelectedDates] = useState([]);
@@ -87,8 +87,8 @@ const EventCreateScreen = () => {
     if (isChecked) {
       setSelectedDates([...selectedDates, {
         date,
-        startTime: EVENT_START_TIME,
-        endTime: EVENT_END_TIME,
+        startTime: eventStartTime,
+        endTime: eventEndTime,
       }]);
     } else {
       setSelectedDates(selectedDates.filter(d => d.date !== date));
@@ -96,25 +96,59 @@ const EventCreateScreen = () => {
   };
 
   /**
-   * 開催日の開始時刻を変更
-   * @param {string} date - 日付文字列
-   * @param {string} newStartTime - 新しい開始時刻
+   * HH:MM文字列から時・分を取得
+   * @param {string} timeStr - HH:MM形式の時刻文字列
+   * @returns {{ hour: string, minute: string }} 時と分
    */
-  const handleStartTimeChange = (date, newStartTime) => {
-    setSelectedDates(selectedDates.map(d =>
-      d.date === date ? { ...d, startTime: newStartTime } : d
-    ));
+  const parseTimeParts = (timeStr) => {
+    const parts = (timeStr || '').split(':');
+    return {
+      hour: parts[0] || '',
+      /** 分はそのまま返す（編集中にパディングすると削除できなくなるため） */
+      minute: parts[1] !== undefined ? parts[1] : '',
+    };
   };
 
   /**
-   * 開催日の終了時刻を変更
-   * @param {string} date - 日付文字列
-   * @param {string} newEndTime - 新しい終了時刻
+   * HH:MM文字列を正規化する（送信前に使用）
+   * 空欄の項目はデフォルト時刻の対応する値で補完する
+   * @param {string} timeStr - 編集中のHH:MM形式（例："9:"）
+   * @param {string} defaultTime - 空欄時のフォールバック（例："10:00"）
+   * @returns {string} 正規化後（例："09:00"）
    */
-  const handleEndTimeChange = (date, newEndTime) => {
-    setSelectedDates(selectedDates.map(d =>
-      d.date === date ? { ...d, endTime: newEndTime } : d
-    ));
+  const normalizeTime = (timeStr, defaultTime) => {
+    const parts = (timeStr || '').split(':');
+    const defaultParts = (defaultTime || '10:00').split(':');
+    /** 時：空欄ならデフォルトの時を使用 */
+    const hour = (parts[0] || '').trim() !== '' ? parts[0] : defaultParts[0];
+    /** 分：空欄ならデフォルトの分を使用 */
+    const minuteRaw = parts[1] !== undefined ? parts[1] : '';
+    const minute = minuteRaw.trim() !== '' ? minuteRaw : (defaultParts[1] || '0');
+    return `${hour}:${String(parseInt(minute, 10)).padStart(2, '0')}`;
+  };
+
+  /**
+   * 開催日の時刻（時・分）を変更し、HH:MM形式で保存
+   * @param {string} date - 日付文字列
+   * @param {'start'|'end'} field - 開始・終了の区別
+   * @param {'hour'|'minute'} part - 時・分の区別
+   * @param {string} value - 入力値（数字のみ）
+   */
+  const handleTimePartChange = (date, field, part, value) => {
+    /** 数字のみ抽出 */
+    const numericValue = toHalfWidth(value).replace(/[^0-9]/g, '');
+    setSelectedDates(selectedDates.map(d => {
+      if (d.date !== date) return d;
+      const currentTime = field === 'start' ? d.startTime : d.endTime;
+      const parts = parseTimeParts(currentTime);
+      if (part === 'hour') {
+        parts.hour = numericValue;
+      } else {
+        parts.minute = numericValue;
+      }
+      const newTime = `${parts.hour}:${parts.minute}`;
+      return field === 'start' ? { ...d, startTime: newTime } : { ...d, endTime: newTime };
+    }));
   };
 
   /**
@@ -177,7 +211,12 @@ const EventCreateScreen = () => {
       capacityPerSlot: type === EVENT_TYPES.TIME_SLOT ? parseInt(capacityPerSlot, 10) : null,
       slotDurationMinutes: type === EVENT_TYPES.TIME_SLOT ? parseInt(slotDurationMinutes, 10) : null,
       estimatedWaitMinutes: type === EVENT_TYPES.SEQUENTIAL ? parseInt(estimatedWaitMinutes, 10) : null,
-      dates: selectedDates, // [{ date, startTime, endTime }, ...]
+      /** 送信前に正規化：空欄はデフォルト設定の時刻で補完 */
+      dates: selectedDates.map(d => ({
+        ...d,
+        startTime: normalizeTime(d.startTime, eventStartTime),
+        endTime: normalizeTime(d.endTime, eventEndTime),
+      })),
     };
 
     const { success, error } = await addEvent(eventData);
@@ -245,7 +284,7 @@ const EventCreateScreen = () => {
               <TextInput
                 label="1枠あたりの定員"
                 value={capacityPerSlot}
-                onChangeText={(val) => setCapacityPerSlot(toHalfWidth(val))}
+                onChangeText={(val) => setCapacityPerSlot(toHalfWidth(val).replace(/[^0-9]/g, ''))}
                 placeholder="例：20"
                 keyboardType="numeric"
                 error={errors.capacityPerSlot}
@@ -254,7 +293,7 @@ const EventCreateScreen = () => {
               <TextInput
                 label="1枠あたりの時間（分）"
                 value={slotDurationMinutes}
-                onChangeText={(val) => setSlotDurationMinutes(toHalfWidth(val))}
+                onChangeText={(val) => setSlotDurationMinutes(toHalfWidth(val).replace(/[^0-9]/g, ''))}
                 placeholder="例：30"
                 keyboardType="numeric"
                 error={errors.slotDurationMinutes}
@@ -264,9 +303,9 @@ const EventCreateScreen = () => {
 
           {type === EVENT_TYPES.SEQUENTIAL && (
             <TextInput
-              label="1番号あたりの推定待ち時間（分）"
+              label="1グループあたりの推定待ち時間（分）"
               value={estimatedWaitMinutes}
-              onChangeText={(val) => setEstimatedWaitMinutes(toHalfWidth(val))}
+              onChangeText={(val) => setEstimatedWaitMinutes(toHalfWidth(val).replace(/[^0-9]/g, ''))}
               placeholder="例：5"
               keyboardType="numeric"
               error={errors.estimatedWaitMinutes}
@@ -275,40 +314,62 @@ const EventCreateScreen = () => {
 
           <View style={styles.datesSection}>
             <Text style={styles.datesSectionTitle}>開催日</Text>
-            {FESTIVAL_DATES.map((date) => {
-              /** この日付が選択されているか */
-              const isSelected = selectedDates.some(d => d.date === date);
-              /** 選択されている場合の日付データ */
-              const dateData = selectedDates.find(d => d.date === date);
-              return (
-                <View key={date} style={styles.dateRow}>
-                  <Checkbox
-                    label={formatDateWithDay(date)}
-                    checked={isSelected}
-                    onToggle={(checked) => handleDateToggle(date, checked)}
-                  />
-                  {isSelected && (
-                    <View style={styles.timeInputRow}>
-                      <TextInput
-                        label="開始"
-                        value={dateData.startTime}
-                        onChangeText={(val) => handleStartTimeChange(date, toHalfWidth(val))}
-                        placeholder="10:00"
-                        style={styles.timeInput}
-                      />
-                      <Text style={styles.timeSeparator}>〜</Text>
-                      <TextInput
-                        label="終了"
-                        value={dateData.endTime}
-                        onChangeText={(val) => handleEndTimeChange(date, toHalfWidth(val))}
-                        placeholder="19:00"
-                        style={styles.timeInput}
-                      />
-                    </View>
-                  )}
-                </View>
-              );
-            })}
+            {isSettingsLoading ? (
+              <ActivityIndicator size="small" color={COLORS.PRIMARY} style={{ marginVertical: SPACING.SM }} />
+            ) : (
+              festivalDates.map((date) => {
+                /** この日付が選択されているか */
+                const isSelected = selectedDates.some(d => d.date === date);
+                /** 選択されている場合の日付データ */
+                const dateData = selectedDates.find(d => d.date === date);
+                return (
+                  <View key={date} style={styles.dateRow}>
+                    <Checkbox
+                      label={formatDateWithDay(date)}
+                      checked={isSelected}
+                      onToggle={(checked) => handleDateToggle(date, checked)}
+                    />
+                    {isSelected && (
+                      <View style={styles.timeInputRow}>
+                        <Text style={styles.timeLabel}>開始</Text>
+                        <TextInput
+                          value={parseTimeParts(dateData.startTime).hour}
+                          onChangeText={(val) => handleTimePartChange(date, 'start', 'hour', val)}
+                          placeholder="10"
+                          keyboardType="numeric"
+                          style={styles.timePartInput}
+                        />
+                        <Text style={styles.timeColon}>：</Text>
+                        <TextInput
+                          value={parseTimeParts(dateData.startTime).minute}
+                          onChangeText={(val) => handleTimePartChange(date, 'start', 'minute', val)}
+                          placeholder="00"
+                          keyboardType="numeric"
+                          style={styles.timePartInput}
+                        />
+                        <Text style={styles.timeSeparator}>〜</Text>
+                        <Text style={styles.timeLabel}>終了</Text>
+                        <TextInput
+                          value={parseTimeParts(dateData.endTime).hour}
+                          onChangeText={(val) => handleTimePartChange(date, 'end', 'hour', val)}
+                          placeholder="19"
+                          keyboardType="numeric"
+                          style={styles.timePartInput}
+                        />
+                        <Text style={styles.timeColon}>：</Text>
+                        <TextInput
+                          value={parseTimeParts(dateData.endTime).minute}
+                          onChangeText={(val) => handleTimePartChange(date, 'end', 'minute', val)}
+                          placeholder="00"
+                          keyboardType="numeric"
+                          style={styles.timePartInput}
+                        />
+                      </View>
+                    )}
+                  </View>
+                );
+              })
+            )}
           </View>
           {errors.dates && <Text style={styles.errorText}>{errors.dates}</Text>}
 
@@ -438,10 +499,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: SPACING.XS,
     marginLeft: SPACING.LG + SPACING.SM,
+    flexWrap: 'wrap',
   },
-  timeInput: {
-    flex: 1,
+  timeLabel: {
+    fontSize: FONT_SIZES.MD,
+    color: COLORS.TEXT_SECONDARY,
+    marginRight: SPACING.XS,
+  },
+  timePartInput: {
+    width: 56,
     marginBottom: 0,
+  },
+  timeColon: {
+    fontSize: FONT_SIZES.LG,
+    color: COLORS.TEXT,
+    marginHorizontal: 2,
   },
   timeSeparator: {
     fontSize: FONT_SIZES.LG,

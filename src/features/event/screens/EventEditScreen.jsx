@@ -27,9 +27,9 @@ import {
   STATUS,
   STATUS_LABELS,
   STATUS_COLORS,
-  SLOT_THRESHOLDS,
   SLOT_STATUS_COLORS,
 } from '../../../shared/constants';
+import { useSettings } from '../../../shared/contexts/SettingsContext';
 import { formatDateWithDay, formatTimeSlotDisplay } from '../../../shared/utils/dateTime';
 import { useResponsive } from '../../../shared/hooks/useResponsive';
 
@@ -37,14 +37,15 @@ import { useResponsive } from '../../../shared/hooks/useResponsive';
  * 定員に対する現在の人数から色を取得
  * @param {number} currentCount - 現在の人数
  * @param {number} capacity - 定員
+ * @param {Object} thresholds - 閾値オブジェクト（LOW, MEDIUM, HIGH, VERY_HIGH）
  * @returns {string} 表示色
  */
-const getSlotStatusColor = (currentCount, capacity) => {
+const getSlotStatusColor = (currentCount, capacity, thresholds) => {
   const rate = (currentCount / capacity) * 100;
-  if (rate <= SLOT_THRESHOLDS.LOW) return SLOT_STATUS_COLORS.VERY_LOW;
-  if (rate <= SLOT_THRESHOLDS.MEDIUM) return SLOT_STATUS_COLORS.LOW;
-  if (rate <= SLOT_THRESHOLDS.HIGH) return SLOT_STATUS_COLORS.MEDIUM;
-  if (rate <= SLOT_THRESHOLDS.VERY_HIGH) return SLOT_STATUS_COLORS.HIGH;
+  if (rate <= thresholds.LOW) return SLOT_STATUS_COLORS.VERY_LOW;
+  if (rate <= thresholds.MEDIUM) return SLOT_STATUS_COLORS.LOW;
+  if (rate <= thresholds.HIGH) return SLOT_STATUS_COLORS.MEDIUM;
+  if (rate <= thresholds.VERY_HIGH) return SLOT_STATUS_COLORS.HIGH;
   return SLOT_STATUS_COLORS.VERY_HIGH;
 };
 
@@ -54,6 +55,7 @@ const getSlotStatusColor = (currentCount, capacity) => {
  */
 const EventEditScreen = () => {
   const { isMobile } = useResponsive();
+  const { slotThresholds } = useSettings();
   const navigation = useNavigation();
   const route = useRoute();
   const { eventId } = route.params;
@@ -65,7 +67,7 @@ const EventEditScreen = () => {
   const [name, setName] = useState('');
   /** 企画場所 */
   const [location, setLocation] = useState('');
-  /** 1番号あたりの推定待ち時間（分） */
+  /** 1グループあたりの推定待ち時間（分） */
   const [estimatedWaitMinutes, setEstimatedWaitMinutes] = useState('');
   /** 送信中状態 */
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -295,7 +297,7 @@ const EventEditScreen = () => {
 
               {event.type === EVENT_TYPES.SEQUENTIAL && (
                 <TextInput
-                  label="1番号あたりの推定待ち時間（分）"
+                  label="1グループあたりの推定待ち時間（分）"
                   value={estimatedWaitMinutes}
                   onChangeText={setEstimatedWaitMinutes}
                   placeholder="例：5"
@@ -349,7 +351,7 @@ const EventEditScreen = () => {
                     {/* 左列 */}
                     <View style={[styles.timeSlotsColumn, isMobile && styles.timeSlotsColumnMobile]}>
                       {dateItem.time_slots?.slice(0, Math.ceil(dateItem.time_slots.length / 2)).map((slot) => {
-                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot);
+                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot, slotThresholds);
                         /** この時間枠が満員かどうか */
                         const isSlotFull = slot.status === STATUS.FULL;
                         /** この時間枠のセレクトを無効にするかどうか */
@@ -394,7 +396,7 @@ const EventEditScreen = () => {
                     {/* 右列 */}
                     <View style={[styles.timeSlotsColumn, isMobile && styles.timeSlotsColumnMobile]}>
                       {dateItem.time_slots?.slice(Math.ceil(dateItem.time_slots.length / 2)).map((slot) => {
-                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot);
+                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot, slotThresholds);
                         /** この時間枠が満員かどうか */
                         const isSlotFull = slot.status === STATUS.FULL;
                         /** この時間枠のセレクトを無効にするかどうか */

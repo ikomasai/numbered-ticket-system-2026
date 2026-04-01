@@ -3,7 +3,9 @@
  * 時間枠の生成や日付フォーマットに使用
  */
 
-import { EVENT_START_TIME, EVENT_END_TIME } from '../constants';
+/** デフォルトの開始・終了時刻（Contextから値が渡されない場合のフォールバック） */
+const DEFAULT_START_TIME = '10:00';
+const DEFAULT_END_TIME = '19:00';
 
 /**
  * 時刻文字列を分に変換
@@ -35,8 +37,8 @@ export const minutesToTime = (minutes) => {
  */
 export const generateTimeSlots = (slotDurationMinutes, startTime, endTime) => {
   const slots = [];
-  const startMinutes = timeToMinutes(startTime || EVENT_START_TIME);
-  const endMinutes = timeToMinutes(endTime || EVENT_END_TIME);
+  const startMinutes = timeToMinutes(startTime || DEFAULT_START_TIME);
+  const endMinutes = timeToMinutes(endTime || DEFAULT_END_TIME);
 
   let currentMinutes = startMinutes;
   while (currentMinutes + slotDurationMinutes <= endMinutes) {
@@ -131,16 +133,19 @@ export const isToday = (dateStr) => {
 };
 
 /**
- * 推定待ち時間を計算
- * @param {number} nextTicketNumber - 次の整理番号
+ * 推定待ち時間を計算（グループ数ベース）
+ * 発券グループ一覧から現在の呼び出し番号より後のグループ数を数える
+ * @param {Array} ticketGroups - 発券グループ一覧（{ min_ticket, max_ticket }）
  * @param {number} currentCallNumber - 現在の呼び出し番号
- * @param {number} estimatedWaitMinutes - 1番号あたりの推定待ち時間（分）
+ * @param {number} estimatedWaitMinutes - 1グループあたりの推定待ち時間（分）
  * @returns {number} 推定待ち時間（分）
  */
-export const calculateEstimatedWaitTime = (nextTicketNumber, currentCallNumber, estimatedWaitMinutes) => {
-  const waitingCount = nextTicketNumber - currentCallNumber - 1;
-  if (waitingCount <= 0) return 0;
-  return waitingCount * estimatedWaitMinutes;
+export const calculateEstimatedWaitTime = (ticketGroups, currentCallNumber, estimatedWaitMinutes) => {
+  if (!ticketGroups || ticketGroups.length === 0) return 0;
+  /** 呼び出されていないグループ数（min_ticketが呼び出し番号より大きいもの） */
+  const waitingGroupCount = ticketGroups.filter(g => g.min_ticket > currentCallNumber).length;
+  if (waitingGroupCount <= 0) return 0;
+  return waitingGroupCount * estimatedWaitMinutes;
 };
 
 /**

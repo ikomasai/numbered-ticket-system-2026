@@ -4,7 +4,7 @@
  * 企画制作部ロールを持つユーザーのみアクセスを許可
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -37,6 +37,13 @@ const LoginScreen = () => {
 
   const { signIn } = useAuth();
   const { isMobile } = useResponsive();
+
+  // ブラウザタブのタイトルを設定
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      document.title = `ログイン | ${APP_NAME}`;
+    }
+  }, []);
 
   /**
    * ログインボタン押下時の処理

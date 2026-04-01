@@ -31,24 +31,26 @@ import {
   STATUS,
   STATUS_LABELS,
   STATUS_COLORS,
-  SLOT_THRESHOLDS,
   SLOT_STATUS_COLORS,
 } from '../../../shared/constants';
+import { useSettings } from '../../../shared/contexts/SettingsContext';
 import { formatDateWithDay, formatTimeSlotDisplay, calculateEstimatedWaitTime, formatWaitTime } from '../../../shared/utils/dateTime';
+import { selectTicketGroupsForCall } from '../../call/services/callService';
 import { useResponsive } from '../../../shared/hooks/useResponsive';
 
 /**
  * 配布状況の割合に応じた色を取得
  * @param {number} currentCount - 現在のカウント
  * @param {number} capacity - 定員
+ * @param {Object} thresholds - 閾値オブジェクト（LOW, MEDIUM, HIGH, VERY_HIGH）
  * @returns {string} ステータスカラー
  */
-const getSlotStatusColor = (currentCount, capacity) => {
+const getSlotStatusColor = (currentCount, capacity, thresholds) => {
   const rate = (currentCount / capacity) * 100;
-  if (rate <= SLOT_THRESHOLDS.LOW) return SLOT_STATUS_COLORS.VERY_LOW;
-  if (rate <= SLOT_THRESHOLDS.MEDIUM) return SLOT_STATUS_COLORS.LOW;
-  if (rate <= SLOT_THRESHOLDS.HIGH) return SLOT_STATUS_COLORS.MEDIUM;
-  if (rate <= SLOT_THRESHOLDS.VERY_HIGH) return SLOT_STATUS_COLORS.HIGH;
+  if (rate <= thresholds.LOW) return SLOT_STATUS_COLORS.VERY_LOW;
+  if (rate <= thresholds.MEDIUM) return SLOT_STATUS_COLORS.LOW;
+  if (rate <= thresholds.HIGH) return SLOT_STATUS_COLORS.MEDIUM;
+  if (rate <= thresholds.VERY_HIGH) return SLOT_STATUS_COLORS.HIGH;
   return SLOT_STATUS_COLORS.VERY_HIGH;
 };
 
@@ -61,6 +63,7 @@ const getSlotStatusColor = (currentCount, capacity) => {
  */
 const TicketDetailScreen = ({ route, navigation }) => {
   const { isMobile } = useResponsive();
+  const { slotThresholds } = useSettings();
 
   /** ルートパラメータから企画情報を取得 */
   const { event: initialEvent } = route.params;
@@ -86,6 +89,8 @@ const TicketDetailScreen = ({ route, navigation }) => {
   const [quantity, setQuantity] = useState(1);
   /** 呼び出し状態（順次案内制用） */
   const [callStatus, setCallStatus] = useState(null);
+  /** 発券グループ一覧（順次案内制の待ち時間計算用） */
+  const [ticketGroups, setTicketGroups] = useState([]);
 
   /** ローディング状態 */
   const [isLoading, setIsLoading] = useState(false);
@@ -163,6 +168,15 @@ const TicketDetailScreen = ({ route, navigation }) => {
   }, [event.id]);
 
   /**
+   * 発券グループ一覧を取得（順次案内制の待ち時間計算用）
+   * @param {string} eventDateId - 企画開催日ID
+   */
+  const fetchTicketGroups = useCallback(async (eventDateId) => {
+    const { data } = await selectTicketGroupsForCall(eventDateId);
+    setTicketGroups(data || []);
+  }, []);
+
+  /**
    * 時間枠一覧を取得
    * @param {string} eventDateId - 企画開催日ID
    */
@@ -193,9 +207,10 @@ const TicketDetailScreen = ({ route, navigation }) => {
         fetchTimeSlots(firstDate.id);
       } else if (event.type === EVENT_TYPES.SEQUENTIAL) {
         fetchCallStatus(firstDate.id);
+        fetchTicketGroups(firstDate.id);
       }
     }
-  }, [eventDates, selectedDate, event.type, fetchTimeSlots, fetchCallStatus]);
+  }, [eventDates, selectedDate, event.type, fetchTimeSlots, fetchCallStatus, fetchTicketGroups]);
 
   // ヘッダータイトルを設定
   useEffect(() => {
@@ -218,9 +233,10 @@ const TicketDetailScreen = ({ route, navigation }) => {
       setTimeSlots([]);
     }
 
-    // 順次案内制の場合は呼び出し状態を取得
+    // 順次案内制の場合は呼び出し状態とグループ一覧を取得
     if (event.type === EVENT_TYPES.SEQUENTIAL) {
       fetchCallStatus(dateItem.id);
+      fetchTicketGroups(dateItem.id);
     }
   };
 
@@ -262,8 +278,11 @@ const TicketDetailScreen = ({ route, navigation }) => {
 
     let result;
 
-    // 電子媒体の場合は予約を作成（お客さんが取得ボタンを押すまで番号は確定しない）
-    if (mediumType === MEDIUM_TYPES.DIGITAL) {
+    // 順次案内制の電子発券：即座にチケットを登録してグループに加算する
+    // （時間枠定員制の電子発券のみ、お客さんが取得ボタンを押すまで番号を確定しない予約フロー）
+    const useReservationFlow = mediumType === MEDIUM_TYPES.DIGITAL && event.type === EVENT_TYPES.TIME_SLOT;
+
+    if (useReservationFlow) {
       result = await createTicketReservation({
         eventId: params.eventId,
         eventDateId: params.eventDateId,
@@ -283,7 +302,7 @@ const TicketDetailScreen = ({ route, navigation }) => {
         }];
       }
     } else {
-      // 紙媒体の場合は従来通り即座に発券
+      // 紙媒体、または順次案内制の電子発券：即座に発券してグループ番号を確定
       if (qty === 1) {
         const { data, error } = await issueTicket(params);
         result = { data: data ? [data] : null, error };
@@ -321,6 +340,7 @@ const TicketDetailScreen = ({ route, navigation }) => {
       fetchTimeSlots(selectedDate.id);
     } else if (event.type === EVENT_TYPES.SEQUENTIAL) {
       fetchCallStatus(selectedDate.id);
+      fetchTicketGroups(selectedDate.id);
     }
   };
 
@@ -350,11 +370,163 @@ const TicketDetailScreen = ({ route, navigation }) => {
         onSelectDate={handleSelectDate}
       />
 
-      {/* メインコンテンツ */}
-      <ScrollView style={styles.content}>
-        <View style={[styles.mainRow, isMobile && styles.mainRowMobile]}>
+      {/* スマホ：専用レイアウト（リスト中央固定＋下部ボタン） */}
+      {isMobile ? (
+        <View style={styles.mobileContainer}>
+          {/* 企画情報（企画名＋バッジ＋場所） */}
+          <View style={[styles.eventInfo, styles.mobileEventInfo]}>
+            <View style={styles.eventHeader}>
+              <Text style={styles.eventName}>{event.name}</Text>
+              <View style={[styles.typeBadge, { backgroundColor: event.type === EVENT_TYPES.TIME_SLOT ? COLORS.PRIMARY : COLORS.SECONDARY }]}>
+                <Text style={styles.typeBadgeText}>{EVENT_TYPE_LABELS[event.type]}</Text>
+              </View>
+            </View>
+            <Text style={styles.eventLocation}>{event.location}</Text>
+          </View>
+
+          {/* ステータス警告 */}
+          {selectedDate && !isDateActive && (
+            <View style={[styles.warningContainer, styles.mobileWarning]}>
+              <Text style={styles.warningText}>
+                この日は現在{STATUS_LABELS[selectedDate.status]}のため発券できません
+              </Text>
+            </View>
+          )}
+
+          {/* 中央スクロールエリア */}
+          <ScrollView style={styles.mobileScrollArea} contentContainerStyle={styles.mobileScrollContent}>
+            {/* 時間枠定員制: 時間枠リスト */}
+            {event.type === EVENT_TYPES.TIME_SLOT && isDateActive && selectedDate && (
+              <>
+                <Text style={styles.sectionTitle}>時間枠を選択</Text>
+                {isLoading ? (
+                  <ActivityIndicator size="small" color={COLORS.PRIMARY} />
+                ) : timeSlots.length > 0 ? (
+                  timeSlots.map(slot => {
+                    const isSlotSelected = selectedTimeSlot?.id === slot.id;
+                    const isSlotActive = slot.status === STATUS.ACTIVE;
+                    const isFull = slot.current_count >= event.capacity_per_slot;
+                    const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot, slotThresholds);
+                    return (
+                      <TouchableOpacity
+                        key={slot.id}
+                        style={[
+                          styles.timeSlotItem,
+                          isSlotSelected && styles.timeSlotItemSelected,
+                          (!isSlotActive || isFull) && styles.timeSlotItemDisabled,
+                        ]}
+                        onPress={() => isSlotActive && !isFull && setSelectedTimeSlot(slot)}
+                        disabled={!isSlotActive || isFull}
+                      >
+                        <Text style={styles.timeSlotTime}>
+                          {formatTimeSlotDisplay(slot.start_time, slot.end_time)}
+                        </Text>
+                        <View style={{ flexDirection: 'row' }}>
+                          <Text style={[
+                            styles.timeSlotCount,
+                            isSlotActive && !isFull && { color: statusColor, fontWeight: 'bold' },
+                          ]}>
+                            {slot.current_count}
+                          </Text>
+                          <Text style={styles.timeSlotCount}>/{event.capacity_per_slot}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })
+                ) : (
+                  <Text style={styles.noSlotsText}>時間枠が設定されていません</Text>
+                )}
+              </>
+            )}
+
+            {/* 順次案内制: 発券・呼び出し状況カード */}
+            {event.type === EVENT_TYPES.SEQUENTIAL && isDateActive && selectedDate && (
+              <View style={styles.statusSection}>
+                <Text style={styles.sectionTitle}>発券・呼び出し状況</Text>
+                <View style={styles.sequentialCard}>
+                  <View style={styles.sequentialRow}>
+                    <View style={styles.sequentialItem}>
+                      <Text style={styles.sequentialLabel}>最後尾番号</Text>
+                      <Text style={styles.sequentialValue}>
+                        {(selectedDate.next_ticket_number || 1) - 1}
+                      </Text>
+                    </View>
+                    <View style={styles.sequentialItem}>
+                      <Text style={styles.sequentialLabel}>現在の呼び出し番号</Text>
+                      <Text style={styles.sequentialValue}>
+                        {callStatus?.current_call_number || 0}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.waitTimeContainer}>
+                    <Text style={styles.waitTimeLabel}>推定待ち時間</Text>
+                    <Text style={styles.waitTimeValue}>
+                      {formatWaitTime(
+                        calculateEstimatedWaitTime(
+                          ticketGroups,
+                          callStatus?.current_call_number || 0,
+                          event.estimated_wait_minutes || 5
+                        )
+                      )}
+                    </Text>
+                    <Text style={styles.waitTimeGroupCount}>
+                      ({ticketGroups.filter(g => g.min_ticket > (callStatus?.current_call_number || 0)).length}グループ待ち)
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            )}
+          </ScrollView>
+
+          {/* 下部固定バー：発行媒体＋枚数＋発券ボタン */}
+          {isDateActive && (
+            <View style={styles.mobileBottomBar}>
+              <View style={styles.mobileBottomControls}>
+                <View style={styles.mobileBottomColumn}>
+                  <Text style={styles.quantityLabel}>発券枚数</Text>
+                  <View style={styles.quantityControls}>
+                    <TouchableOpacity
+                      style={styles.quantityButton}
+                      onPress={() => setQuantity((prev) => Math.max(1, prev - 1))}
+                      disabled={quantity <= 1}
+                    >
+                      <Text style={[styles.quantityButtonText, quantity <= 1 && styles.quantityButtonTextDisabled]}>-</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.quantityValue}>{quantity}</Text>
+                    <TouchableOpacity
+                      style={styles.quantityButton}
+                      onPress={() => setQuantity((prev) => prev + 1)}
+                    >
+                      <Text style={styles.quantityButtonText}>+</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                <View style={styles.mobileBottomColumn}>
+                  <RadioGroup
+                    label="発行媒体"
+                    options={mediumTypeOptions}
+                    value={mediumType}
+                    onValueChange={setMediumType}
+                    horizontal
+                  />
+                </View>
+              </View>
+              <Button
+                title={quantity > 1 ? `${quantity}枚 発券する` : '発券する'}
+                onPress={handleIssue}
+                isLoading={isIssuing}
+                disabled={isIssueDisabled}
+                style={styles.issueButton}
+              />
+            </View>
+          )}
+        </View>
+      ) : (
+      /* デスクトップ：既存の左右パネルレイアウト */
+      <View style={styles.content}>
+        <View style={styles.mainRowDesktop}>
           {/* 左側：企画情報・日付・操作パネル */}
-          <View style={[styles.leftPanel, isMobile && styles.panelMobile]}>
+          <View style={styles.leftPanel}>
             {/* 企画情報 */}
             <View style={styles.eventInfo}>
               <View style={styles.eventHeader}>
@@ -398,6 +570,7 @@ const TicketDetailScreen = ({ route, navigation }) => {
                   options={mediumTypeOptions}
                   value={mediumType}
                   onValueChange={setMediumType}
+                  horizontal
                 />
 
                 {/* 人数入力 */}
@@ -433,22 +606,23 @@ const TicketDetailScreen = ({ route, navigation }) => {
           </View>
 
           {/* 右側：時間枠選択または順次案内制の情報 */}
-          <View style={[styles.rightPanel, isMobile && styles.panelMobile]}>
+          <View style={styles.rightPanel}>
             {/* 時間枠定員制の場合 */}
             {event.type === EVENT_TYPES.TIME_SLOT && isDateActive && (
-              <View style={[styles.timeSlotsContainer, isMobile && styles.timeSlotsContainerMobile]}>
+              <View style={styles.timeSlotsContainer}>
                 <Text style={styles.sectionTitle}>時間枠を選択</Text>
                 {isLoading ? (
                   <ActivityIndicator size="small" color={COLORS.PRIMARY} />
                 ) : timeSlots.length > 0 ? (
-                  <View style={[styles.timeSlotsGrid, isMobile && styles.timeSlotsGridMobile]}>
+                  <ScrollView style={styles.timeSlotsScroll}>
+                  <View style={styles.timeSlotsGrid}>
                     {/* 左列 */}
                     <View style={[styles.timeSlotsColumn, isMobile && styles.timeSlotsColumnMobile]}>
                       {timeSlots.slice(0, Math.ceil(timeSlots.length / 2)).map(slot => {
                         const isSlotSelected = selectedTimeSlot?.id === slot.id;
                         const isSlotActive = slot.status === STATUS.ACTIVE;
                         const isFull = slot.current_count >= event.capacity_per_slot;
-                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot);
+                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot, slotThresholds);
 
                         return (
                           <TouchableOpacity
@@ -485,7 +659,7 @@ const TicketDetailScreen = ({ route, navigation }) => {
                         const isSlotSelected = selectedTimeSlot?.id === slot.id;
                         const isSlotActive = slot.status === STATUS.ACTIVE;
                         const isFull = slot.current_count >= event.capacity_per_slot;
-                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot);
+                        const statusColor = getSlotStatusColor(slot.current_count, event.capacity_per_slot, slotThresholds);
 
                         return (
                           <TouchableOpacity
@@ -517,6 +691,7 @@ const TicketDetailScreen = ({ route, navigation }) => {
                       })}
                     </View>
                   </View>
+                  </ScrollView>
                 ) : (
                   <Text style={styles.noSlotsText}>時間枠が設定されていません</Text>
                 )}
@@ -547,11 +722,14 @@ const TicketDetailScreen = ({ route, navigation }) => {
                     <Text style={styles.waitTimeValue}>
                       {formatWaitTime(
                         calculateEstimatedWaitTime(
-                          selectedDate.next_ticket_number || 1,
+                          ticketGroups,
                           callStatus?.current_call_number || 0,
                           event.estimated_wait_minutes || 5
                         )
                       )}
+                    </Text>
+                    <Text style={styles.waitTimeGroupCount}>
+                      ({ticketGroups.filter(g => g.min_ticket > (callStatus?.current_call_number || 0)).length}グループ待ち)
                     </Text>
                   </View>
                 </View>
@@ -559,7 +737,8 @@ const TicketDetailScreen = ({ route, navigation }) => {
             )}
           </View>
         </View>
-      </ScrollView>
+      </View>
+      )}
 
       {/* 発券結果モーダル */}
       <Modal
@@ -592,7 +771,7 @@ const TicketDetailScreen = ({ route, navigation }) => {
                   )}
                   <View style={styles.reservationNotice}>
                     <Text style={styles.reservationNoticeText}>
-                      ※ お客様がこのQRコードを読み取り、取得ボタンを押すと整理番号が確定します
+                      ※ お客様がこのQRコードを読み取ると番号が確定します。QRコードは1グループにつき1つ、まとめて整理券が発行されます。
                     </Text>
                   </View>
                 </View>
@@ -670,8 +849,56 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: SPACING.MD,
   },
+  /** スマホ用: メインコンテナ（flex:1で全画面） */
+  mobileContainer: {
+    flex: 1,
+    padding: SPACING.MD,
+    paddingBottom: 0,
+  },
+  /** スマホ用: 企画情報（上部固定） */
+  mobileEventInfo: {
+    marginBottom: SPACING.SM,
+  },
+  /** スマホ用: 警告 */
+  mobileWarning: {
+    marginBottom: SPACING.SM,
+  },
+  /** スマホ用: 中央スクロールエリア */
+  mobileScrollArea: {
+    flex: 1,
+  },
+  /** スマホ用: スクロールエリア内padding */
+  mobileScrollContent: {
+    paddingBottom: SPACING.SM,
+  },
+  /** スマホ用: 下部固定バー */
+  mobileBottomBar: {
+    backgroundColor: COLORS.CARD_BACKGROUND,
+    padding: SPACING.MD,
+    paddingBottom: SPACING.LG,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  /** スマホ用: 発行媒体＋枚数の横並び（2列・各中央揃え） */
+  mobileBottomControls: {
+    flexDirection: 'row',
+    marginBottom: SPACING.SM,
+  },
+  /** スマホ用: 下部コントロールの各列（flex:1で等幅・中央揃え） */
+  mobileBottomColumn: {
+    flex: 1,
+    alignItems: 'center',
+  },
   /** PC用: 横並び */
   mainRow: {
+    flexDirection: 'row',
+    gap: SPACING.MD,
+  },
+  /** PC用: デスクトップ横並び（flex:1で高さを満たす） */
+  mainRowDesktop: {
+    flex: 1,
     flexDirection: 'row',
     gap: SPACING.MD,
   },
@@ -776,6 +1003,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.CARD_BACKGROUND,
     padding: SPACING.MD,
     borderRadius: 12,
+  },
+  /** 時間枠リストのスクロールエリア */
+  timeSlotsScroll: {
+    flex: 1,
   },
   /** スマホ用: 時間枠コンテナ（コンテンツに合わせてサイズ） */
   timeSlotsContainerMobile: {
@@ -885,6 +1116,11 @@ const styles = StyleSheet.create({
     color: COLORS.TEXT_SECONDARY,
     marginBottom: SPACING.XS,
   },
+  waitTimeGroupCount: {
+    fontSize: FONT_SIZES.SM,
+    color: COLORS.TEXT_SECONDARY,
+    marginTop: 2,
+  },
   waitTimeValue: {
     fontSize: FONT_SIZES.HEADING,
     fontWeight: 'bold',
@@ -907,15 +1143,15 @@ const styles = StyleSheet.create({
     gap: SPACING.MD,
   },
   quantityButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: COLORS.PRIMARY,
     justifyContent: 'center',
     alignItems: 'center',
   },
   quantityButtonText: {
-    fontSize: FONT_SIZES.XL,
+    fontSize: FONT_SIZES.LG,
     fontWeight: 'bold',
     color: COLORS.CARD_BACKGROUND,
   },
@@ -930,7 +1166,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   issueButton: {
-    marginTop: SPACING.SM,
+    marginTop: SPACING.MD,
     marginBottom: SPACING.LG,
   },
   modalOverlay: {

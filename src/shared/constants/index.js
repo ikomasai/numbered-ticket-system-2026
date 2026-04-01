@@ -16,24 +16,13 @@ export const DEFAULT_TIMEOUT = 10000;
 export const MAX_RETRY_COUNT = 3;
 
 /**
- * イベント開始時刻
- * 環境変数から取得（デフォルト: 10:00）
+ * 以下の設定値はSupabaseのnumbered_ticket_settingsテーブルで管理
+ * SettingsContext経由で取得してください
+ * - 開催日一覧（festivalDates）
+ * - イベント開始時刻（eventStartTime）
+ * - イベント終了時刻（eventEndTime）
+ * - 閾値（slotThresholds）
  */
-export const EVENT_START_TIME = process.env.EXPO_PUBLIC_EVENT_START_TIME || '10:00';
-
-/**
- * イベント終了時刻
- * 環境変数から取得（デフォルト: 19:00）
- */
-export const EVENT_END_TIME = process.env.EXPO_PUBLIC_EVENT_END_TIME || '19:00';
-
-/**
- * 大学祭開催日一覧
- * 環境変数から取得してDate配列に変換
- */
-export const FESTIVAL_DATES = (process.env.EXPO_PUBLIC_FESTIVAL_DATES || '2024-11-02,2024-11-03,2024-11-04')
-  .split(',')
-  .map(dateStr => dateStr.trim());
 
 /**
  * 企画タイプ定数
@@ -175,20 +164,6 @@ export const SPACING = {
   XL: 32,
 };
 
-/**
- * 時間枠の配布状況表示用閾値（%）
- * 環境変数から取得してデフォルト値を設定
- */
-export const SLOT_THRESHOLDS = {
-  /** 低（25%以下） */
-  LOW: parseInt(process.env.EXPO_PUBLIC_SLOT_THRESHOLD_LOW || '25'),
-  /** 中（25〜50%） */
-  MEDIUM: parseInt(process.env.EXPO_PUBLIC_SLOT_THRESHOLD_MEDIUM || '50'),
-  /** 高（50〜60%） */
-  HIGH: parseInt(process.env.EXPO_PUBLIC_SLOT_THRESHOLD_HIGH || '60'),
-  /** 非常に高（60〜80%） */
-  VERY_HIGH: parseInt(process.env.EXPO_PUBLIC_SLOT_THRESHOLD_VERY_HIGH || '80'),
-};
 
 /**
  * 時間枠の配布状況表示用色

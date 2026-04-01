@@ -35,7 +35,7 @@ export const issueTicket = async ({ eventId, eventDateId, timeSlotId, mediumType
     // 1. 企画開催日のステータスを確認
     const { data: eventDate, error: fetchError } = await supabase
       .from('event_dates')
-      .select('next_ticket_number, status')
+      .select('next_ticket_number, next_group_number, status')
       .eq('id', eventDateId)
       .single();
 
@@ -82,7 +82,7 @@ export const issueTicket = async ({ eventId, eventDateId, timeSlotId, mediumType
     /** QRコード用トークン */
     const qrToken = mediumType === MEDIUM_TYPES.DIGITAL ? generateUUID() : null;
 
-    // 4. 整理券を登録
+    // 4. 整理券を登録（順次案内制の場合はグループ番号を設定）
     const { data: ticket, error: insertError } = await supabase
       .from('tickets')
       .insert({
@@ -92,18 +92,23 @@ export const issueTicket = async ({ eventId, eventDateId, timeSlotId, mediumType
         ticket_number: ticketNumber,
         medium_type: mediumType,
         qr_token: qrToken,
+        /** 順次案内制のみグループ番号を設定（1回の発券=1グループ） */
+        group_number: !timeSlotId ? eventDate.next_group_number : 0,
       })
       .select()
       .single();
 
     if (insertError) throw insertError;
 
-    // 5. 順次案内制の場合のみ企画開催日の次の整理番号を更新
+    // 5. 順次案内制の場合のみ企画開催日の次の整理番号とグループ番号を更新
     // 時間枠定員制の場合は時間枠の start_ticket_number + current_count で計算するため更新不要
     if (!timeSlotId) {
       const { error: updateDateError } = await supabase
         .from('event_dates')
-        .update({ next_ticket_number: ticketNumber + 1 })
+        .update({
+          next_ticket_number: ticketNumber + 1,
+          next_group_number: eventDate.next_group_number + 1,
+        })
         .eq('id', eventDateId)
         .eq('next_ticket_number', ticketNumber); // 楽観的ロック
 
@@ -173,7 +178,7 @@ export const issueMultipleTickets = async ({ eventId, eventDateId, timeSlotId, m
     // 1. 企画開催日のステータスを確認
     const { data: eventDate, error: fetchError } = await supabase
       .from('event_dates')
-      .select('next_ticket_number, status')
+      .select('next_ticket_number, next_group_number, status')
       .eq('id', eventDateId)
       .single();
 
@@ -215,7 +220,7 @@ export const issueMultipleTickets = async ({ eventId, eventDateId, timeSlotId, m
     // 3. 整理券データを一括作成（デジタルの場合、全チケットで共通のQRトークンを使用）
     /** 共通QRコード用トークン（1グループ1つ） */
     const sharedQrToken = mediumType === MEDIUM_TYPES.DIGITAL ? generateUUID() : null;
-    /** 一括挿入用のチケットデータ配列 */
+    /** 一括挿入用のチケットデータ配列（同一グループ番号を全チケットに設定） */
     const ticketsToInsert = [];
     for (let i = 0; i < quantity; i++) {
       ticketsToInsert.push({
@@ -225,6 +230,8 @@ export const issueMultipleTickets = async ({ eventId, eventDateId, timeSlotId, m
         ticket_number: startTicketNumber + i,
         medium_type: mediumType,
         qr_token: sharedQrToken,
+        /** 順次案内制のみグループ番号を設定（複数枚でも同じグループ番号） */
+        group_number: !timeSlotId ? eventDate.next_group_number : 0,
       });
     }
 
@@ -236,11 +243,14 @@ export const issueMultipleTickets = async ({ eventId, eventDateId, timeSlotId, m
 
     if (insertError) throw insertError;
 
-    // 5. 順次案内制の場合は次の整理番号を更新
+    // 5. 順次案内制の場合は次の整理番号とグループ番号を更新
     if (!timeSlotId) {
       const { error: updateDateError } = await supabase
         .from('event_dates')
-        .update({ next_ticket_number: startTicketNumber + quantity })
+        .update({
+          next_ticket_number: startTicketNumber + quantity,
+          next_group_number: eventDate.next_group_number + 1,
+        })
         .eq('id', eventDateId)
         .eq('next_ticket_number', startTicketNumber); // 楽観的ロック
 
