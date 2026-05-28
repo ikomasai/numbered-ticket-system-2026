@@ -85,6 +85,8 @@ const CallDetailScreen = ({ route, navigation }) => {
   const [isFullScreen, setIsFullScreen] = useState(false);
   /** 呼び出し表示データ */
   const [callDisplayData, setCallDisplayData] = useState(null);
+  /** 全キャンセル確認モーダルの表示フラグ */
+  const [showCancelAllModal, setShowCancelAllModal] = useState(false);
 
   /**
    * 時間枠一覧を取得
@@ -154,12 +156,13 @@ const CallDetailScreen = ({ route, navigation }) => {
     }
   }, [eventDates, selectedDate, event.type, fetchTimeSlots, fetchCallStatus, fetchTicketGroups]);
 
-  // ヘッダータイトルを設定
+  // ヘッダータイトルを設定（スマホでは外側のグローバルヘッダーと重複するため非表示）
   useEffect(() => {
     navigation.setOptions({
+      headerShown: !isMobile,
       headerTitle: event.name,
     });
-  }, [navigation, event.name]);
+  }, [navigation, event.name, isMobile]);
 
   /**
    * 日付を選択
@@ -323,6 +326,40 @@ const CallDetailScreen = ({ route, navigation }) => {
   };
 
   /**
+   * 呼び出しを全てキャンセル（current_call_numberを0に戻す）
+   * 既存のcall_statusがあれば0で更新、なければ何もしない
+   */
+  const handleConfirmCancelAll = async () => {
+    if (!selectedDate) return;
+
+    setShowCancelAllModal(false);
+    setIsUpdating(true);
+
+    try {
+      const { error: updateError } = await supabase
+        .from('call_status')
+        .update({ current_call_number: 0 })
+        .eq('event_id', event.id)
+        .eq('event_date_id', selectedDate.id);
+
+      if (updateError) throw updateError;
+
+      /** ローカル状態を更新 */
+      setCallStatus(prev => prev ? { ...prev, current_call_number: 0 } : prev);
+      setSelectedGroup(null);
+    } catch (err) {
+      console.error('呼び出し全キャンセルエラー:', err);
+      if (Platform.OS === 'web') {
+        window.alert('呼び出しのキャンセルに失敗しました');
+      } else {
+        Alert.alert('エラー', '呼び出しのキャンセルに失敗しました');
+      }
+    }
+
+    setIsUpdating(false);
+  };
+
+  /**
    * グループリストの初期スクロール位置を設定（スマホ・PC共通）
    * 呼び出し済みの最後から2件目が見えるようにスクロールする
    */
@@ -403,7 +440,21 @@ const CallDetailScreen = ({ route, navigation }) => {
             <>
               <View style={styles.mobileGroupArea}>
                 {isDateCallable && selectedDate && (
-                  <Text style={styles.sectionTitle}>グループを選択して呼び出し</Text>
+                  <View style={styles.mobileGroupHeader}>
+                    <Text style={styles.sectionTitle}>グループを選択して呼び出し</Text>
+                    <TouchableOpacity
+                      style={styles.cancelAllButtonMobile}
+                      onPress={() => setShowCancelAllModal(true)}
+                      disabled={!callStatus?.current_call_number}
+                    >
+                      <Text style={[
+                        styles.cancelAllButtonText,
+                        !callStatus?.current_call_number && styles.cancelAllButtonTextDisabled,
+                      ]}>
+                        呼び出しを全てキャンセル
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 )}
                 {isDateCallable && selectedDate && (
                   isLoading ? (
@@ -655,6 +706,16 @@ const CallDetailScreen = ({ route, navigation }) => {
                     isLoading={isUpdating}
                     style={styles.callButton}
                   />
+
+                  {/* 呼び出しを全てキャンセル */}
+                  <View style={styles.cancelAllSection}>
+                    <Button
+                      title="呼び出しを全てキャンセル"
+                      onPress={() => setShowCancelAllModal(true)}
+                      disabled={!callStatus?.current_call_number || isUpdating}
+                      variant="danger"
+                    />
+                  </View>
                 </View>
               )}
             </View>
@@ -788,6 +849,37 @@ const CallDetailScreen = ({ route, navigation }) => {
           </View>
         </View>
       )}
+
+      {/* 呼び出し全キャンセル確認モーダル */}
+      <Modal
+        visible={showCancelAllModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCancelAllModal(false)}
+      >
+        <View style={styles.confirmModalOverlay}>
+          <View style={styles.confirmModal}>
+            <Text style={styles.confirmModalTitle}>呼び出しを全てキャンセル</Text>
+            <Text style={styles.confirmModalMessage}>
+              この日の呼び出し番号を 0 に戻します。{'\n'}この操作は取り消せません。よろしいですか？
+            </Text>
+            <View style={styles.confirmModalButtons}>
+              <TouchableOpacity
+                style={[styles.confirmModalButton, styles.confirmModalButtonCancel]}
+                onPress={() => setShowCancelAllModal(false)}
+              >
+                <Text style={styles.confirmModalButtonCancelText}>キャンセル</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmModalButton, styles.confirmModalButtonDanger]}
+                onPress={handleConfirmCancelAll}
+              >
+                <Text style={styles.confirmModalButtonDangerText}>全てキャンセル</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* 全画面呼び出し表示モーダル */}
       <Modal
@@ -1231,6 +1323,88 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.MD,
     color: COLORS.CARD_BACKGROUND,
     opacity: 0.6,
+  },
+  /** スマホ用「グループを選択して呼び出し」とキャンセルボタンを横並びにするヘッダー行 */
+  mobileGroupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.SM,
+  },
+  /** スマホ用キャンセルボタン（テキストリンク風） */
+  cancelAllButtonMobile: {
+    paddingVertical: SPACING.XS,
+    paddingHorizontal: SPACING.SM,
+  },
+  cancelAllButtonText: {
+    fontSize: FONT_SIZES.SM,
+    color: COLORS.ERROR,
+    fontWeight: '600',
+  },
+  cancelAllButtonTextDisabled: {
+    color: COLORS.TEXT_SECONDARY,
+    opacity: 0.5,
+  },
+  /** PC版キャンセルボタンセクション */
+  cancelAllSection: {
+    marginTop: SPACING.MD,
+  },
+  /** 確認モーダルオーバーレイ */
+  confirmModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.MD,
+  },
+  confirmModal: {
+    backgroundColor: COLORS.CARD_BACKGROUND,
+    borderRadius: 16,
+    padding: SPACING.LG,
+    width: '100%',
+    maxWidth: 360,
+  },
+  confirmModalTitle: {
+    fontSize: FONT_SIZES.XL,
+    fontWeight: 'bold',
+    color: COLORS.TEXT,
+    marginBottom: SPACING.SM,
+    textAlign: 'center',
+  },
+  confirmModalMessage: {
+    fontSize: FONT_SIZES.MD,
+    color: COLORS.TEXT_SECONDARY,
+    textAlign: 'center',
+    marginBottom: SPACING.LG,
+    lineHeight: 22,
+  },
+  confirmModalButtons: {
+    flexDirection: 'row',
+    gap: SPACING.SM,
+  },
+  confirmModalButton: {
+    flex: 1,
+    paddingVertical: SPACING.SM,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  confirmModalButtonCancel: {
+    backgroundColor: COLORS.BACKGROUND,
+    borderWidth: 1,
+    borderColor: COLORS.BORDER,
+  },
+  confirmModalButtonCancelText: {
+    fontSize: FONT_SIZES.MD,
+    color: COLORS.TEXT,
+    fontWeight: '600',
+  },
+  confirmModalButtonDanger: {
+    backgroundColor: COLORS.ERROR,
+  },
+  confirmModalButtonDangerText: {
+    fontSize: FONT_SIZES.MD,
+    color: COLORS.CARD_BACKGROUND,
+    fontWeight: '600',
   },
 });
 
